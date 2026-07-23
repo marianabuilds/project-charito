@@ -1,146 +1,123 @@
-import { useEffect, useRef, useState } from 'react'
-import type { CultureId, ModeId } from '../data/presets'
-import type { SpeechEngine } from '../audio/speechEngine'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { settingsStore } from '../state/settingsStore';
+import { culturalPresets } from '../data/culturalPresets';
+import { speak } from '../services/audioEngine';
+import type { DetoxSettings } from '../types/settings';
 
-export type SessionStatus = 'idle' | 'running' | 'paused' | 'completed'
+export type SessionStatus = 'idle' | 'running' | 'paused' | 'completed';
 
-export interface DetoxSessionConfig {
-  durationMinutes: number
-  mode: ModeId
-  cultureId: CultureId
-  phraseText: string
-  voiceLang: string
-  engine: SpeechEngine
-}
-
-export interface DetoxSessionControls {
-  status: SessionStatus
-  remainingSeconds: number
-  totalSeconds: number
-  start: () => void
-  pause: () => void
-  resume: () => void
-  reset: () => void
-}
-
-export function useDetoxSession(config: DetoxSessionConfig): DetoxSessionControls {
-  const { durationMinutes, mode, cultureId, phraseText, voiceLang, engine } =
-    config
-
-  const totalSeconds = Math.max(60, Math.round(durationMinutes * 60))
-
-  const [status, setStatus] = useState<SessionStatus>('idle')
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(totalSeconds)
-
-  const hasMidReminderRef = useRef(false)
-  const hasCompletionSpokenRef = useRef(false)
-  const latestConfigRef = useRef({
-    mode,
-    cultureId,
-    phraseText,
-    voiceLang,
-  })
+export function useDetoxSession() {
+  const [status, setStatus] = useState<SessionStatus>('idle');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentMessageText, setCurrentMessageText] = useState<string | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  const [settings, setSettings] = useState<DetoxSettings>(settingsStore.get());
 
   useEffect(() => {
-    latestConfigRef.current = { mode, cultureId, phraseText, voiceLang }
-  }, [mode, cultureId, phraseText, voiceLang])
+    const unsubscribe = settingsStore.subscribe((next) => setSettings(next));
+    return unsubscribe;
+  }, []);
 
-  // Reset countdown when duration changes while idle or completed.
-  useEffect(() => {
-    if (status === 'idle' || status === 'completed') {
-      setRemainingSeconds(totalSeconds)
-      hasMidReminderRef.current = false
-      hasCompletionSpokenRef.current = false
+  const totalSeconds = settings.durationMinutes * 60;
+
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-  }, [status, totalSeconds])
+  }, []);
 
-  useEffect(() => {
-    if (status !== 'running') return
-    if (typeof window === 'undefined') return
+  const pickRandomMessage = useCallback(() => {
+    const preset = culturalPresets.find(
+      (p) => p.cultureCode === settings.cultureCode,
+    );
+    if (!preset) return null;
+    const pool = preset.messages.filter((m) =>
+      settings.selectedMessageIds.includes(m.id),
+    );
+    if (pool.length === 0) return null;
+    const index = Math.floor(Math.random() * pool.length);
+    return pool[index];
+  }, [settings.cultureCode, settings.selectedMessageIds]);
 
-    const intervalId = window.setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(intervalId)
-          setStatus('completed')
-          return 0
+  const tick = useCallback(() => {
+    setElapsedSeconds((prev) => {
+      const next = prev + 1;
+
+      if (next >= totalSeconds) {
+        const msg = pickRandomMessage();
+        if (msg) {
+          setCurrentMessageText(msg.text);
+          void speak(msg.text, settings.languageCode);
         }
-        return prev - 1
-      })
-    }, 1000)
+        setStatus('completed');
+        clearTimer();
+        return totalSeconds;
+      }
 
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [status])
+      // Gentle mode: speak a reminder every 5 minutes.
+      if (settings.mode === 'gentle' && next % (5 * 60) === 0) {
+        const msg = pickRandomMessage();
+        if (msg) {
+          setCurrentMessageText(msg.text);
+          void speak(msg.text, settings.languageCode);
+        }
+      }
 
-  // Schedule audio reminders based on elapsed time and mode.
+      return next;
+    });
+  }, [
+    totalSeconds,
+    settings.mode,
+    settings.languageCode,
+    pickRandomMessage,
+    clearTimer,
+  ]);
+
+  const start = useCallback(() => {
+    if (status === 'running') return;
+    setStatus('running');
+    setElapsedSeconds(0);
+    setCurrentMessageText(null);
+    clearTimer();
+    intervalRef.current = window.setInterval(tick, 1000);
+  }, [status, clearTimer, tick]);
+
+  const pause = useCallback(() => {
+    if (status !== 'running') return;
+    setStatus('paused');
+    clearTimer();
+  }, [status, clearTimer]);
+
+  const resume = useCallback(() => {
+    if (status !== 'paused') return;
+    setStatus('running');
+    clearTimer();
+    intervalRef.current = window.setInterval(tick, 1000);
+  }, [status, clearTimer, tick]);
+
+  const reset = useCallback(() => {
+    setStatus('idle');
+    setElapsedSeconds(0);
+    setCurrentMessageText(null);
+    clearTimer();
+  }, [clearTimer]);
+
   useEffect(() => {
-    if (!engine.isSupported) return
-    if (status !== 'running' && status !== 'completed') return
+    return () => clearTimer();
+  }, [clearTimer]);
 
-    const { mode: latestMode, phraseText: latestText, voiceLang: latestLang } =
-      latestConfigRef.current
-
-    const elapsed = totalSeconds - remainingSeconds
-
-    // Gentle mode: one reminder halfway through, and one at completion.
-    if (
-      latestMode === 'gentle' &&
-      status === 'running' &&
-      !hasMidReminderRef.current &&
-      elapsed >= totalSeconds / 2
-    ) {
-      hasMidReminderRef.current = true
-      engine.speak(latestText, {
-        lang: latestLang,
-      })
-    }
-
-    // All modes: speak once when the session completes.
-    if (status === 'completed' && !hasCompletionSpokenRef.current) {
-      hasCompletionSpokenRef.current = true
-      engine.speak(latestText, {
-        lang: latestLang,
-      })
-    }
-  }, [engine, remainingSeconds, status, totalSeconds])
-
-  function start() {
-    engine.cancel()
-    setRemainingSeconds(totalSeconds)
-    hasMidReminderRef.current = false
-    hasCompletionSpokenRef.current = false
-    setStatus('running')
-  }
-
-  function pause() {
-    if (status !== 'running') return
-    engine.cancel()
-    setStatus('paused')
-  }
-
-  function resume() {
-    if (status !== 'paused') return
-    setStatus('running')
-  }
-
-  function reset() {
-    engine.cancel()
-    setStatus('idle')
-    setRemainingSeconds(totalSeconds)
-    hasMidReminderRef.current = false
-    hasCompletionSpokenRef.current = false
-  }
+  const remainingSeconds = Math.max(totalSeconds - elapsedSeconds, 0);
 
   return {
     status,
+    elapsedSeconds,
     remainingSeconds,
-    totalSeconds,
+    isStrict: settings.mode === 'strict',
+    currentMessageText,
     start,
     pause,
     resume,
     reset,
-  }
+  };
 }
-

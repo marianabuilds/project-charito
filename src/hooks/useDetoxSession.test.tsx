@@ -1,108 +1,130 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
-import { useDetoxSession } from './useDetoxSession'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useDetoxSession } from './useDetoxSession';
+import type { DetoxSettings } from '../types/settings';
+
+// Shared mutable settings so individual tests can override.
+let mockSettings: DetoxSettings = {
+  durationMinutes: 0.5, // 30 seconds — fast enough for timer tests
+  cultureCode: 'pe_PE',
+  languageCode: 'es-PE',
+  mode: 'gentle',
+  selectedMessageIds: ['pe_oye_compadre', 'pe_haz_un_descanso'],
+};
+
+vi.mock('../state/settingsStore', () => ({
+  settingsStore: {
+    get: () => mockSettings,
+    subscribe: (listener: (s: DetoxSettings) => void) => {
+      listener(mockSettings);
+      return () => {};
+    },
+    set: vi.fn(),
+  },
+}));
+
+const mockSpeak = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('../services/audioEngine', () => ({
+  isSupported: () => true,
+  speak: (...args: unknown[]) => mockSpeak(...args),
+}));
 
 function advanceTimersBySeconds(seconds: number) {
   act(() => {
-    vi.advanceTimersByTime(seconds * 1000)
-  })
+    vi.advanceTimersByTime(seconds * 1000);
+  });
 }
 
 describe('useDetoxSession', () => {
-  const speak = vi.fn()
-  const cancel = vi.fn()
-
   beforeEach(() => {
-    vi.useFakeTimers()
-    speak.mockReset()
-    cancel.mockReset()
-  })
+    vi.useFakeTimers();
+    mockSpeak.mockClear();
+    mockSettings = {
+      durationMinutes: 0.5,
+      cultureCode: 'pe_PE',
+      languageCode: 'es-PE',
+      mode: 'gentle',
+      selectedMessageIds: ['pe_oye_compadre', 'pe_haz_un_descanso'],
+    };
+  });
 
   afterEach(() => {
-    vi.useRealTimers()
-  })
+    vi.useRealTimers();
+  });
 
-  it('counts down and completes a session', () => {
-    const { result } = renderHook(() =>
-      useDetoxSession({
-        durationMinutes: 0.1, // 6 seconds after minimum clamp to 60s
-        mode: 'gentle',
-        cultureId: 'pe',
-        phraseText: 'test phrase',
-        voiceLang: 'es-PE',
-        engine: {
-          isSupported: true,
-          speak,
-          cancel,
-        },
-      }),
-    )
+  it('starts in idle status', () => {
+    const { result } = renderHook(() => useDetoxSession());
+    expect(result.current.status).toBe('idle');
+  });
 
-    expect(result.current.status).toBe('idle')
+  it('counts down and completes after duration', () => {
+    const { result } = renderHook(() => useDetoxSession());
 
     act(() => {
-      result.current.start()
-    })
+      result.current.start();
+    });
 
-    expect(result.current.status).toBe('running')
+    expect(result.current.status).toBe('running');
 
-    // Fast-forward time enough that the session finishes.
-    advanceTimersBySeconds(65)
+    // Advance past the 30-second session
+    advanceTimersBySeconds(31);
 
-    expect(result.current.status).toBe('completed')
-    // At least one completion reminder should have been spoken.
-    expect(speak).toHaveBeenCalled()
-  })
+    expect(result.current.status).toBe('completed');
+  });
 
-  it('emits a mid-session reminder in gentle mode', () => {
-    const { result } = renderHook(() =>
-      useDetoxSession({
-        durationMinutes: 1,
-        mode: 'gentle',
-        cultureId: 'us',
-        phraseText: 'gentle phrase',
-        voiceLang: 'en-US',
-        engine: {
-          isSupported: true,
-          speak,
-          cancel,
-        },
-      }),
-    )
+  it('speaks a completion reminder when session ends', () => {
+    const { result } = renderHook(() => useDetoxSession());
 
     act(() => {
-      result.current.start()
-    })
+      result.current.start();
+    });
 
-    // Halfway through a 60-second session.
-    advanceTimersBySeconds(31)
+    advanceTimersBySeconds(31);
 
-    expect(speak).toHaveBeenCalled()
-  })
+    expect(mockSpeak).toHaveBeenCalled();
+  });
 
-  it('does not schedule speech when engine is not supported', () => {
-    const { result } = renderHook(() =>
-      useDetoxSession({
-        durationMinutes: 0.5,
-        mode: 'strict',
-        cultureId: 'mx',
-        phraseText: 'strict phrase',
-        voiceLang: 'es-MX',
-        engine: {
-          isSupported: false,
-          speak,
-          cancel,
-        },
-      }),
-    )
+  it('pauses and resumes the session', () => {
+    const { result } = renderHook(() => useDetoxSession());
 
     act(() => {
-      result.current.start()
-    })
+      result.current.start();
+    });
 
-    advanceTimersBySeconds(40)
+    advanceTimersBySeconds(5);
 
-    expect(speak).not.toHaveBeenCalled()
-  })
-})
+    act(() => {
+      result.current.pause();
+    });
 
+    expect(result.current.status).toBe('paused');
+    const elapsed = result.current.elapsedSeconds;
+
+    advanceTimersBySeconds(5);
+    expect(result.current.elapsedSeconds).toBe(elapsed); // no change while paused
+
+    act(() => {
+      result.current.resume();
+    });
+
+    expect(result.current.status).toBe('running');
+  });
+
+  it('reset returns to idle and clears elapsed time', () => {
+    const { result } = renderHook(() => useDetoxSession());
+
+    act(() => {
+      result.current.start();
+    });
+
+    advanceTimersBySeconds(10);
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.elapsedSeconds).toBe(0);
+  });
+});
