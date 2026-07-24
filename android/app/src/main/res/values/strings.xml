@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Project Charito</string>
+    <string name="title_activity_main">Project Charito</string>
+    <string name="package_name">com.marianabuilds.charito</string>
+    <string name="custom_url_scheme">com.marianabuilds.charito</string>
+</resources>
