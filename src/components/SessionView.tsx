@@ -18,25 +18,38 @@ const AMBIENT_SOUNDS = [
   { id: 'lofi', label: 'Lo-fi', url: 'https://cdn.pixabay.com/download/audio/2023/01/27/audio_8b378b3728.mp3' },
 ] as const;
 
-type QuickBlockingMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
-type QuickStep = 'method' | 'config' | 'message' | 'confirm';
+// ── App categories ──────────────────────────────────────────────────────────
+const APP_CATEGORIES = [
+  {
+    label: 'Social Media',
+    apps: ['Instagram', 'TikTok', 'Twitter/X', 'Facebook', 'Snapchat', 'Reddit', 'LinkedIn'],
+  },
+  {
+    label: 'Video & Music',
+    apps: ['YouTube', 'Netflix', 'Spotify', 'Twitch'],
+  },
+  {
+    label: 'Messaging',
+    apps: ['WhatsApp', 'Telegram', 'iMessage', 'Discord'],
+  },
+  {
+    label: 'Browser & Games',
+    apps: ['Safari/Chrome', 'Games'],
+  },
+] as const;
 
-const COMMON_APPS = [
-  'Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook',
-  'Snapchat', 'Reddit', 'WhatsApp', 'LinkedIn', 'Safari/Chrome', 'Games',
-];
+// Flat list for backward compat
+const COMMON_APPS = APP_CATEGORIES.flatMap((c) => c.apps);
 
-const QUICK_METHODS: {
-  id: QuickBlockingMethod;
-  title: string;
-  description: string;
-  example: string;
-}[] = [
-  { id: 'duration', title: 'Duration', description: 'Full offline block', example: 'e.g. 30 min screen-free after lunch' },
-  { id: 'set-hours', title: 'Set hours', description: 'Gentle nudges', example: 'e.g. No phone 9 PM – 7 AM' },
-  { id: 'usage-limit', title: 'Usage limit', description: 'Cap screen time', example: 'e.g. Max 60 min of social media/day' },
-  { id: 'launch-count', title: 'Launch count', description: 'Fewer opens', example: 'e.g. Open Instagram max 5 times today' },
-];
+// Apps with "high usage" data tag
+const HIGH_USAGE_APPS = new Set(['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook']);
+// Top 4 high-data apps
+const TOP_HIGH_DATA = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X'];
+
+// Duration quick-pick pills
+const DURATION_PILLS = [15, 30, 45, 60, 90, 120] as const;
+
+type QuickStep = 'duration' | 'message' | 'confirm';
 
 function formatDuration(minutes: number): string {
   if (minutes <= 60) return `${minutes} min`;
@@ -69,14 +82,9 @@ export const SessionView: React.FC = () => {
   const [ambientSound, setAmbientSound] = React.useState<'off' | 'rain' | 'forest' | 'lofi'>('off');
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  // 4-step quick flow state
-  const [quickStep, setQuickStep] = React.useState<QuickStep>('method');
-  const [quickMethod, setQuickMethod] = React.useState<QuickBlockingMethod>('duration');
+  // 3-step quick flow state
+  const [quickStep, setQuickStep] = React.useState<QuickStep>('duration');
   const [quickDuration, setQuickDuration] = React.useState(30);
-  const [quickFromTime, setQuickFromTime] = React.useState('09:00');
-  const [quickUntilTime, setQuickUntilTime] = React.useState('17:00');
-  const [quickUsageLimit, setQuickUsageLimit] = React.useState(60);
-  const [quickLaunchCount, setQuickLaunchCount] = React.useState(10);
   const [quickMessageId, setQuickMessageId] = React.useState('');
   const [quickCustomMessage, setQuickCustomMessage] = React.useState('');
   const [quickCustomAudio, setQuickCustomAudio] = React.useState(() => settingsStore.get().customMessageAudio);
@@ -89,10 +97,31 @@ export const SessionView: React.FC = () => {
       prev.includes(app) ? prev.filter((a) => a !== app) : [...prev, app],
     );
   };
+
+  const selectCategoryApps = (apps: readonly string[]) => {
+    setQuickSelectedApps((prev) => {
+      const appSet = new Set(apps);
+      const allSelected = apps.every((a) => prev.includes(a));
+      if (allSelected) {
+        return prev.filter((a) => !appSet.has(a));
+      }
+      return [...new Set([...prev, ...apps])];
+    });
+  };
+
   const quickAllAppsSelected = quickSelectedApps.length === COMMON_APPS.length;
+
   const quickAppsBadge = quickAllAppsSelected
     ? 'All apps'
     : `${quickSelectedApps.length} app${quickSelectedApps.length === 1 ? '' : 's'}`;
+
+  // Preview text: first 3 selected app names (when not all selected)
+  const quickAppsPreviewText = React.useMemo(() => {
+    if (quickAllAppsSelected || quickSelectedApps.length === 0) return null;
+    const preview = quickSelectedApps.slice(0, 3).join(', ');
+    const remainder = quickSelectedApps.length - 3;
+    return remainder > 0 ? `${preview} +${remainder} more` : preview;
+  }, [quickSelectedApps, quickAllAppsSelected]);
 
   const {
     isRecording: isRecordingMsg,
@@ -180,11 +209,7 @@ export const SessionView: React.FC = () => {
   };
 
   const handleStartNow = () => {
-    // Apply duration if method is duration-based
-    if (quickMethod === 'duration') {
-      settingsStore.set({ durationMinutes: quickDuration });
-    }
-    // Apply chosen message
+    settingsStore.set({ durationMinutes: quickDuration });
     if (quickMessageId === 'custom') {
       settingsStore.set({ selectedMessageId: 'custom', customMessage: quickCustomMessage });
     } else if (quickMessageId) {
@@ -193,7 +218,7 @@ export const SessionView: React.FC = () => {
       settingsStore.set({ selectedMessageId: null, customMessage: '' });
     }
     // Reset step for next time
-    setQuickStep('method');
+    setQuickStep('duration');
     start();
     toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
@@ -204,7 +229,6 @@ export const SessionView: React.FC = () => {
     totalSeconds > 0 ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100 : 0;
 
   const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
-  const selectedMethodMeta = QUICK_METHODS.find((m) => m.id === quickMethod)!;
 
   // Build message preview for confirm step
   let quickMessagePreview = 'Random';
@@ -217,154 +241,65 @@ export const SessionView: React.FC = () => {
     }
   }
 
-  // ── Idle state: 4-step flow ─────────────────────────────────────────────
+  // ── Idle state: 3-step flow ─────────────────────────────────────────────
   if (status === 'idle') {
     return (
       <div className="quick-session-card">
-        {/* ── Step 1: Choose blocking method ──────────────────────────── */}
-        {quickStep === 'method' && (
+        {/* ── Step 1: Duration ──────────────────────────────────────────── */}
+        {quickStep === 'duration' && (
           <>
             <p className="quick-section-label">Quick offline block</p>
-            <p className="quick-section-title">How do you want to block?</p>
-            <div className="quick-method-list">
-              {QUICK_METHODS.map((m) => (
+            <p className="quick-section-title">How long?</p>
+            <p className="quick-duration-big" style={{ fontFamily: 'var(--font-heading)', fontSize: '3rem', margin: '0.5rem 0' }}>
+              {formatDuration(quickDuration)}
+            </p>
+            <input
+              type="range"
+              className="quick-range"
+              min={5}
+              max={120}
+              step={5}
+              value={quickDuration}
+              onChange={(e) => setQuickDuration(Number(e.target.value))}
+              aria-label="Session duration"
+              aria-valuetext={formatDuration(quickDuration)}
+              style={{ margin: '0.5rem 0 0.75rem' }}
+            />
+            {/* Duration pills */}
+            <div className="quick-duration-pills">
+              {DURATION_PILLS.map((d) => (
                 <button
-                  key={m.id}
+                  key={d}
                   type="button"
-                  className="quick-method-row"
-                  onClick={() => {
-                    setQuickMethod(m.id);
-                    setQuickStep('config');
-                  }}
+                  className={`quick-duration-pill${quickDuration === d ? ' quick-duration-pill--active' : ''}`}
+                  onClick={() => setQuickDuration(d)}
                 >
-                  <span className="quick-method-name">{m.title}</span>
-                  <span className="quick-method-desc">{m.description}</span>
-                  <span className="method-example">{m.example}</span>
+                  {formatDuration(d)}
                 </button>
               ))}
             </div>
-          </>
-        )}
-
-        {/* ── Step 2: Method-specific config ──────────────────────────── */}
-        {quickStep === 'config' && (
-          <>
-            <button
-              type="button"
-              className="quick-back-btn"
-              onClick={() => setQuickStep('method')}
-            >
-              ← Back
-            </button>
-            <p className="quick-section-title">{selectedMethodMeta.title}</p>
-
-            {quickMethod === 'duration' && (
-              <div className="quick-config-block">
-                <p className="quick-duration-big">{formatDuration(quickDuration)}</p>
-                <input
-                  type="range"
-                  className="quick-range"
-                  min={5}
-                  max={120}
-                  step={5}
-                  value={quickDuration}
-                  onChange={(e) => setQuickDuration(Number(e.target.value))}
-                  aria-label="Session duration"
-                  aria-valuetext={formatDuration(quickDuration)}
-                />
-              </div>
-            )}
-
-            {quickMethod === 'set-hours' && (
-              <div className="quick-config-block">
-                <div className="quick-time-row">
-                  <div className="quick-time-field">
-                    <label className="quick-time-label" htmlFor="qf-from">From</label>
-                    <input
-                      id="qf-from"
-                      type="time"
-                      className="quick-time-input"
-                      value={quickFromTime}
-                      onChange={(e) => setQuickFromTime(e.target.value)}
-                    />
-                  </div>
-                  <div className="quick-time-field">
-                    <label className="quick-time-label" htmlFor="qf-until">Until</label>
-                    <input
-                      id="qf-until"
-                      type="time"
-                      className="quick-time-input"
-                      value={quickUntilTime}
-                      onChange={(e) => setQuickUntilTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {quickMethod === 'usage-limit' && (
-              <div className="quick-config-block">
-                <p className="quick-duration-big">{quickUsageLimit} min</p>
-                <p className="quick-config-hint">Max minutes per day</p>
-                <input
-                  type="range"
-                  className="quick-range"
-                  min={15}
-                  max={240}
-                  step={15}
-                  value={quickUsageLimit}
-                  onChange={(e) => setQuickUsageLimit(Number(e.target.value))}
-                  aria-label="Max minutes per day"
-                />
-              </div>
-            )}
-
-            {quickMethod === 'launch-count' && (
-              <div className="quick-config-block">
-                <p className="quick-config-hint">Max opens per day</p>
-                <div className="quick-stepper">
-                  <button
-                    type="button"
-                    className="quick-stepper-btn"
-                    onClick={() => setQuickLaunchCount((n) => Math.max(1, n - 1))}
-                    aria-label="Decrease"
-                  >
-                    −
-                  </button>
-                  <span className="quick-duration-big">{quickLaunchCount}</span>
-                  <button
-                    type="button"
-                    className="quick-stepper-btn"
-                    onClick={() => setQuickLaunchCount((n) => Math.min(50, n + 1))}
-                    aria-label="Increase"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            )}
-
             <button
               type="button"
               className="button button-primary quick-start-btn"
               onClick={() => setQuickStep('message')}
+              style={{ marginTop: '1rem' }}
             >
               Next →
             </button>
           </>
         )}
 
-        {/* ── Step 3: Pick a message (shown for ALL methods) ───────────────────────────────────── */}
+        {/* ── Step 2: Message ───────────────────────────────────────────── */}
         {quickStep === 'message' && (
           <>
             <button
               type="button"
               className="quick-back-btn"
-              onClick={() => setQuickStep('config')}
+              onClick={() => setQuickStep('duration')}
             >
               ← Back
             </button>
-            <p className="quick-section-title">Choose a message</p>
+            <p className="quick-section-title">Your reminder</p>
             <div className="quick-message-list">
               {/* Random (default) */}
               <label className="quick-message-row">
@@ -431,7 +366,7 @@ export const SessionView: React.FC = () => {
                     onChange={(e) => setQuickCustomMessage(e.target.value)}
                   />
 
-                  {/* Mic recording — hidden when MediaRecorder not available */}
+                  {/* Mic recording */}
                   {hasMic && (
                     <div
                       style={{
@@ -516,50 +451,25 @@ export const SessionView: React.FC = () => {
           </>
         )}
 
-        {/* ── Step 4: Confirm ─────────────────────────────────────────── */}
+        {/* ── Step 3: Summary / Ready to start ─────────────────────────── */}
         {quickStep === 'confirm' && (
           <>
-            <button
-              type="button"
-              className="quick-back-btn"
-              onClick={() => setQuickStep('method')}
-            >
-              ← Back
-            </button>
-            <p className="quick-section-title">Ready to start?</p>
+            <p className="quick-section-title">Ready to start</p>
+
+            {/* Duration — large EB Garamond */}
+            <p style={{ fontFamily: 'var(--font-heading)', fontSize: '2.5rem', fontWeight: 400, color: 'var(--text-h)', margin: '0.25rem 0 0.125rem', lineHeight: 1.1 }}>
+              {formatDuration(quickDuration)}
+            </p>
+
+            {/* Message preview */}
+            {quickMessagePreview !== 'Random' && (
+              <p style={{ fontStyle: 'italic', color: 'var(--text-m)', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>
+                "{quickMessagePreview}"
+              </p>
+            )}
+
+            {/* Apps section */}
             <div className="quick-confirm-summary">
-              <div className="quick-confirm-row">
-                <span className="quick-confirm-label">Method</span>
-                <span className="quick-confirm-value">{selectedMethodMeta.title}</span>
-              </div>
-              {quickMethod === 'duration' && (
-                <div className="quick-confirm-row">
-                  <span className="quick-confirm-label">Duration</span>
-                  <span className="quick-confirm-value">{formatDuration(quickDuration)}</span>
-                </div>
-              )}
-              {quickMethod === 'set-hours' && (
-                <div className="quick-confirm-row">
-                  <span className="quick-confirm-label">Window</span>
-                  <span className="quick-confirm-value">{quickFromTime} – {quickUntilTime}</span>
-                </div>
-              )}
-              {quickMethod === 'usage-limit' && (
-                <div className="quick-confirm-row">
-                  <span className="quick-confirm-label">Limit</span>
-                  <span className="quick-confirm-value">{quickUsageLimit} min/day</span>
-                </div>
-              )}
-              {quickMethod === 'launch-count' && (
-                <div className="quick-confirm-row">
-                  <span className="quick-confirm-label">Opens</span>
-                  <span className="quick-confirm-value">{quickLaunchCount}/day</span>
-                </div>
-              )}
-              <div className="quick-confirm-row">
-                <span className="quick-confirm-label">Message</span>
-                <span className="quick-confirm-value">{quickMessagePreview}</span>
-              </div>
               <div className="quick-confirm-row">
                 <span className="quick-confirm-label">Apps</span>
                 <span className="quick-confirm-value" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -577,8 +487,36 @@ export const SessionView: React.FC = () => {
                   </button>
                 </span>
               </div>
+
+              {/* Collapsed preview of selected apps */}
+              {!quickAppsExpanded && quickAppsPreviewText && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.15rem 0 0.25rem', paddingLeft: '0.25rem' }}>
+                  {quickAppsPreviewText}
+                </p>
+              )}
+
+              {/* Expanded app list grouped by category */}
               {quickAppsExpanded && (
                 <div className="apps-list" style={{ margin: '0.25rem 0 0.5rem' }}>
+                  {/* Recommended shortcuts */}
+                  <div className="apps-recommended-row">
+                    <button
+                      type="button"
+                      className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}
+                    >
+                      ＋ Add social media block
+                    </button>
+                    <button
+                      type="button"
+                      className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}
+                    >
+                      ＋ Add high-usage block
+                    </button>
+                  </div>
+
+                  {/* Select all */}
                   {!quickAllAppsSelected && (
                     <button
                       type="button"
@@ -588,26 +526,58 @@ export const SessionView: React.FC = () => {
                       Select all
                     </button>
                   )}
-                  {COMMON_APPS.map((app) => (
-                    <label key={app} className="apps-list-row">
-                      <input
-                        type="checkbox"
-                        checked={quickSelectedApps.includes(app)}
-                        onChange={() => toggleQuickApp(app)}
-                        className="apps-checkbox"
-                      />
-                      <span className="apps-list-name">{app}</span>
-                    </label>
+
+                  {/* Categorized list */}
+                  {APP_CATEGORIES.map((cat) => (
+                    <div key={cat.label} className="apps-category-group">
+                      <div className="apps-category-header">
+                        <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                        <button
+                          type="button"
+                          className="apps-category-all-btn"
+                          onClick={() => selectCategoryApps(cat.apps)}
+                        >
+                          All
+                        </button>
+                      </div>
+                      {cat.apps.map((app) => (
+                        <label key={app} className="apps-list-row">
+                          <input
+                            type="checkbox"
+                            checked={quickSelectedApps.includes(app)}
+                            onChange={() => toggleQuickApp(app)}
+                            className="apps-checkbox"
+                          />
+                          <span className="apps-list-name">{app}</span>
+                          {HIGH_USAGE_APPS.has(app) && (
+                            <span className="apps-high-usage-tag">📱 High usage</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Start now — full width sage green */}
             <button
               type="button"
               className="button button-primary quick-start-btn"
               onClick={handleStartNow}
+              style={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 600, marginTop: '0.75rem' }}
             >
               Start now
+            </button>
+
+            {/* Back link */}
+            <button
+              type="button"
+              className="quick-back-btn"
+              onClick={() => setQuickStep('message')}
+              style={{ marginTop: '0.5rem', alignSelf: 'center' }}
+            >
+              ← Back
             </button>
           </>
         )}

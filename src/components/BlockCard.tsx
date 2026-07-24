@@ -26,10 +26,32 @@ const BLOCKING_METHODS: {
 
 const LOCATION_RADII = [50, 100, 200, 500] as const;
 
-const COMMON_APPS = [
-  'Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook',
-  'Snapchat', 'Reddit', 'WhatsApp', 'LinkedIn', 'Safari/Chrome', 'Games',
-];
+const APP_CATEGORIES = [
+  {
+    label: 'Social Media',
+    apps: ['Instagram', 'TikTok', 'Twitter/X', 'Facebook', 'Snapchat', 'Reddit', 'LinkedIn'],
+  },
+  {
+    label: 'Video & Music',
+    apps: ['YouTube', 'Netflix', 'Spotify', 'Twitch'],
+  },
+  {
+    label: 'Messaging',
+    apps: ['WhatsApp', 'Telegram', 'iMessage', 'Discord'],
+  },
+  {
+    label: 'Browser & Games',
+    apps: ['Safari/Chrome', 'Games'],
+  },
+] as const;
+
+// Flat list for backward compat
+const COMMON_APPS = APP_CATEGORIES.flatMap((c) => c.apps);
+
+// Apps with "high usage" data tag
+const HIGH_USAGE_APPS = new Set(['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook']);
+// Top 4 high-data apps
+const TOP_HIGH_DATA = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X'];
 
 function formatDuration(minutes: number): string {
   if (minutes <= 60) return `${minutes} min`;
@@ -268,6 +290,17 @@ export const BlockCard: React.FC = () => {
     setForm((f) => ({ ...f, selectedApps: [...COMMON_APPS] }));
   };
 
+  const selectCategoryApps = (apps: readonly string[]) => {
+    const appSet = new Set(apps);
+    setForm((f) => {
+      const allSelected = apps.every((a) => f.selectedApps.includes(a));
+      if (allSelected) {
+        return { ...f, selectedApps: f.selectedApps.filter((a) => !appSet.has(a)) };
+      }
+      return { ...f, selectedApps: [...new Set([...f.selectedApps, ...apps])] };
+    });
+  };
+
   // Validate save: set-hours requires both times; location requires a saved location
   const canSave =
     (form.blockingMethod !== 'set-hours' ||
@@ -278,6 +311,15 @@ export const BlockCard: React.FC = () => {
   const appsBadge = allAppsSelected
     ? 'All apps'
     : `${form.selectedApps.length} app${form.selectedApps.length === 1 ? '' : 's'}`;
+
+  // Preview text (first 3 selected when not all)
+  const appsPreviewText = allAppsSelected || form.selectedApps.length === 0
+    ? null
+    : (() => {
+        const preview = form.selectedApps.slice(0, 3).join(', ');
+        const remainder = form.selectedApps.length - 3;
+        return remainder > 0 ? `${preview} +${remainder} more` : preview;
+      })();
 
   return (
     <div className="block-card">
@@ -514,6 +556,12 @@ export const BlockCard: React.FC = () => {
                 {appsBadge}
               </span>
             </div>
+            {/* Collapsed preview */}
+            {!form.appsExpanded && appsPreviewText && (
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.15rem 0 0', paddingLeft: '0.25rem' }}>
+                {appsPreviewText}
+              </p>
+            )}
             <button
               type="button"
               className="apps-expand-btn"
@@ -524,6 +572,24 @@ export const BlockCard: React.FC = () => {
             </button>
             {form.appsExpanded && (
               <div className="apps-list">
+                {/* Recommended shortcuts */}
+                <div className="apps-recommended-row">
+                  <button
+                    type="button"
+                    className="apps-recommended-btn"
+                    onClick={() => setForm((f) => ({ ...f, selectedApps: [...APP_CATEGORIES[0].apps] }))}
+                  >
+                    ＋ Add social media block
+                  </button>
+                  <button
+                    type="button"
+                    className="apps-recommended-btn"
+                    onClick={() => setForm((f) => ({ ...f, selectedApps: [...TOP_HIGH_DATA] }))}
+                  >
+                    ＋ Add high-usage block
+                  </button>
+                </div>
+
                 {!allAppsSelected && (
                   <button
                     type="button"
@@ -533,16 +599,35 @@ export const BlockCard: React.FC = () => {
                     Select all
                   </button>
                 )}
-                {COMMON_APPS.map((app) => (
-                  <label key={app} className="apps-list-row">
-                    <input
-                      type="checkbox"
-                      checked={form.selectedApps.includes(app)}
-                      onChange={() => toggleApp(app)}
-                      className="apps-checkbox"
-                    />
-                    <span className="apps-list-name">{app}</span>
-                  </label>
+
+                {/* Categorized list */}
+                {APP_CATEGORIES.map((cat) => (
+                  <div key={cat.label} className="apps-category-group">
+                    <div className="apps-category-header">
+                      <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                      <button
+                        type="button"
+                        className="apps-category-all-btn"
+                        onClick={() => selectCategoryApps(cat.apps)}
+                      >
+                        All
+                      </button>
+                    </div>
+                    {cat.apps.map((app) => (
+                      <label key={app} className="apps-list-row">
+                        <input
+                          type="checkbox"
+                          checked={form.selectedApps.includes(app)}
+                          onChange={() => toggleApp(app)}
+                          className="apps-checkbox"
+                        />
+                        <span className="apps-list-name">{app}</span>
+                        {HIGH_USAGE_APPS.has(app) && (
+                          <span className="apps-high-usage-tag">📱 High usage</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
                 ))}
               </div>
             )}

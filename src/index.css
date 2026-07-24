@@ -27,8 +27,8 @@
   --shadow-accent: none;
 
   /* Typography */
-  --font-heading: 'Fraunces', Georgia, serif;
-  --font-body:    'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'EB Garamond', Georgia, serif;
+  --font-body:    'Atkinson Hyperlegible', system-ui, sans-serif;
 
   font-family: var(--font-body);
   font-size: 16px;

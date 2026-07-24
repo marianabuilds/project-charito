@@ -1899,6 +1899,45 @@ input[type='range'] {
   line-height: 1.45;
 }
 
+/* ── Did-you-know strip ──────────────────────────────────────────────────── */
+.did-you-know-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  line-height: 1.45;
+}
+
+.did-you-know-label {
+  font-weight: 700;
+  color: var(--text-h);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.did-you-know-text {
+  flex: 1;
+}
+
+.did-you-know-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-m);
+  font-size: 0.75rem;
+  padding: 0;
+  flex-shrink: 0;
+  line-height: 1;
+  align-self: center;
+}
+.did-you-know-dismiss:hover { color: var(--text-h); }
+
 .home-username-heading {
   font-family: var(--font-heading);
   font-size: clamp(1.75rem, 6vw, 2.5rem);
@@ -2632,6 +2671,122 @@ input[type='range'] {
   text-align: center;
 }
 
+/* ── Onboarding back button ───────────────────────────────────────────────── */
+.onboarding-back-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-m);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+.onboarding-back-btn:hover { color: var(--text-h); }
+
+/* ── Onboarding "How it works" steps ─────────────────────────────────────── */
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.onboarding-step {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.onboarding-step-number {
+  font-family: var(--font-heading);
+  font-size: 2.5rem;
+  font-weight: 500;
+  color: var(--accent);
+  line-height: 1;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+
+.onboarding-step-title {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--text-h);
+  margin: 0 0 0.2rem;
+}
+
+.onboarding-step-desc {
+  font-size: 0.875rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Onboarding permissions ───────────────────────────────────────────────── */
+.onboarding-permissions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+
+.onboarding-permission-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 64px;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  width: 100%;
+}
+.onboarding-permission-row:last-child { border-bottom: none; }
+.onboarding-permission-row:hover:not(:disabled) { background: var(--accent-bg); }
+.onboarding-permission-row:disabled { cursor: default; }
+
+.onboarding-permission-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.onboarding-permission-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.onboarding-permission-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.onboarding-permission-desc {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  line-height: 1.4;
+}
+
+.onboarding-permission-action {
+  font-size: 0.875rem;
+  color: var(--accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
 /* ── Plan badges ──────────────────────────────────────────────────────────── */
 .plan-badge {
   font-size: 0.75rem;
@@ -2827,4 +2982,97 @@ input[type='range'] {
 .apps-list-name {
   font-size: 0.9375rem;
   color: var(--text-h);
+  flex: 1;
+}
+
+/* ── App category grouping ───────────────────────────────────────────────── */
+.apps-category-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.apps-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.875rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.apps-category-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-m);
+  letter-spacing: 0.06em;
+}
+
+.apps-category-all-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  color: var(--accent);
+  cursor: pointer;
+}
+.apps-category-all-btn:hover { background: var(--accent-bg); }
+
+/* ── Recommended shortcuts ───────────────────────────────────────────────── */
+.apps-recommended-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.apps-recommended-btn {
+  background: none;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.apps-recommended-btn:hover { background: var(--accent-bg); }
+
+/* ── High usage tag ──────────────────────────────────────────────────────── */
+.apps-high-usage-tag {
+  font-size: 0.6875rem;
+  color: var(--text-m);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Duration pills ──────────────────────────────────────────────────────── */
+.quick-duration-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.quick-duration-pill {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.875rem;
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.quick-duration-pill:hover { border-color: var(--accent-border); background: var(--accent-bg); }
+.quick-duration-pill--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }
