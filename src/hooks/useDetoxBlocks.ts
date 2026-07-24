@@ -175,7 +175,7 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
       active: true,
       location: null,
       locationRadius: 100,
-      excludedApps: [],
+      selectedApps: [],
     };
     blockStore.set({ blocks: [...state.blocks, snoozedBlock] });
   }, []);

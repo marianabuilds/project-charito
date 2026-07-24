@@ -105,7 +105,7 @@ interface FormState {
   locationRadius: number;
   locationLoading: boolean;
   locationError: string;
-  excludedApps: string[];
+  selectedApps: string[];
   appsExpanded: boolean;
 }
 
@@ -125,7 +125,7 @@ const EMPTY_FORM: FormState = {
   locationRadius: 100,
   locationLoading: false,
   locationError: '',
-  excludedApps: [],
+  selectedApps: [...COMMON_APPS],
   appsExpanded: false,
 };
 
@@ -220,7 +220,8 @@ export const BlockCard: React.FC = () => {
       active: true,
       location: form.location,
       locationRadius: form.locationRadius,
-      excludedApps: [...form.excludedApps],
+      // Empty = all apps (shorthand); only store a list when it's a true subset
+      selectedApps: form.selectedApps.length === COMMON_APPS.length ? [] : [...form.selectedApps],
     };
     const current = blockStore.get();
     blockStore.set({ blocks: [...current.blocks, block] });
@@ -254,13 +255,17 @@ export const BlockCard: React.FC = () => {
     }));
   };
 
-  const toggleExcludeApp = (app: string) => {
+  const toggleApp = (app: string) => {
     setForm((f) => ({
       ...f,
-      excludedApps: f.excludedApps.includes(app)
-        ? f.excludedApps.filter((a) => a !== app)
-        : [...f.excludedApps, app],
+      selectedApps: f.selectedApps.includes(app)
+        ? f.selectedApps.filter((a) => a !== app)
+        : [...f.selectedApps, app],
     }));
+  };
+
+  const selectAllApps = () => {
+    setForm((f) => ({ ...f, selectedApps: [...COMMON_APPS] }));
   };
 
   // Validate save: set-hours requires both times; location requires a saved location
@@ -269,10 +274,10 @@ export const BlockCard: React.FC = () => {
       (form.setHoursStart.length > 0 && form.setHoursEnd.length > 0)) &&
     (form.blockingMethod !== 'location' || form.location !== null);
 
-  const includedCount = COMMON_APPS.length - form.excludedApps.length;
-  const appsBadge = form.excludedApps.length === 0
+  const allAppsSelected = form.selectedApps.length === COMMON_APPS.length;
+  const appsBadge = allAppsSelected
     ? 'All apps'
-    : `${includedCount} app${includedCount === 1 ? '' : 's'}`;
+    : `${form.selectedApps.length} app${form.selectedApps.length === 1 ? '' : 's'}`;
 
   return (
     <div className="block-card">
@@ -504,8 +509,8 @@ export const BlockCard: React.FC = () => {
           {/* 4. Apps */}
           <div className="block-form-row">
             <div className="apps-section-header">
-              <span className="block-form-label">Apps</span>
-              <span className={`apps-badge${form.excludedApps.length === 0 ? ' apps-badge--all' : ' apps-badge--custom'}`}>
+              <span className="block-form-label">Which apps?</span>
+              <span className={`apps-badge${allAppsSelected ? ' apps-badge--all' : ' apps-badge--custom'}`}>
                 {appsBadge}
               </span>
             </div>
@@ -515,16 +520,25 @@ export const BlockCard: React.FC = () => {
               onClick={() => setForm((f) => ({ ...f, appsExpanded: !f.appsExpanded }))}
               aria-expanded={form.appsExpanded}
             >
-              {form.appsExpanded ? '▲ Hide app list' : '＋ Customize apps'}
+              {form.appsExpanded ? '▲ Collapse' : '＋ Choose apps'}
             </button>
             {form.appsExpanded && (
               <div className="apps-list">
+                {!allAppsSelected && (
+                  <button
+                    type="button"
+                    className="apps-select-all-btn"
+                    onClick={selectAllApps}
+                  >
+                    Select all
+                  </button>
+                )}
                 {COMMON_APPS.map((app) => (
                   <label key={app} className="apps-list-row">
                     <input
                       type="checkbox"
-                      checked={!form.excludedApps.includes(app)}
-                      onChange={() => toggleExcludeApp(app)}
+                      checked={form.selectedApps.includes(app)}
+                      onChange={() => toggleApp(app)}
                       className="apps-checkbox"
                     />
                     <span className="apps-list-name">{app}</span>
@@ -733,6 +747,9 @@ export const BlockCard: React.FC = () => {
                     ))
                   )}
                   <span className="block-method-badge">{methodLabel(block.blockingMethod)}</span>
+                  <span className="block-apps-badge">
+                    {block.selectedApps.length === 0 ? 'All apps' : `${block.selectedApps.length} apps`}
+                  </span>
                 </div>
               </div>
               <div className="block-row-right">

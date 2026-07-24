@@ -21,6 +21,11 @@ const AMBIENT_SOUNDS = [
 type QuickBlockingMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
 type QuickStep = 'method' | 'config' | 'message' | 'confirm';
 
+const COMMON_APPS = [
+  'Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook',
+  'Snapchat', 'Reddit', 'WhatsApp', 'LinkedIn', 'Safari/Chrome', 'Games',
+];
+
 const QUICK_METHODS: {
   id: QuickBlockingMethod;
   title: string;
@@ -76,6 +81,18 @@ export const SessionView: React.FC = () => {
   const [quickCustomMessage, setQuickCustomMessage] = React.useState('');
   const [quickCustomAudio, setQuickCustomAudio] = React.useState(() => settingsStore.get().customMessageAudio);
   const [previewingId, setPreviewingId] = React.useState<string | null>(null);
+  const [quickSelectedApps, setQuickSelectedApps] = React.useState<string[]>([...COMMON_APPS]);
+  const [quickAppsExpanded, setQuickAppsExpanded] = React.useState(false);
+
+  const toggleQuickApp = (app: string) => {
+    setQuickSelectedApps((prev) =>
+      prev.includes(app) ? prev.filter((a) => a !== app) : [...prev, app],
+    );
+  };
+  const quickAllAppsSelected = quickSelectedApps.length === COMMON_APPS.length;
+  const quickAppsBadge = quickAllAppsSelected
+    ? 'All apps'
+    : `${quickSelectedApps.length} app${quickSelectedApps.length === 1 ? '' : 's'}`;
 
   const {
     isRecording: isRecordingMsg,
@@ -544,9 +561,46 @@ export const SessionView: React.FC = () => {
                 <span className="quick-confirm-value">{quickMessagePreview}</span>
               </div>
               <div className="quick-confirm-row">
-                <span className="quick-confirm-label">Applies to</span>
-                <span className="quick-confirm-value">All apps</span>
+                <span className="quick-confirm-label">Apps</span>
+                <span className="quick-confirm-value" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className={`apps-badge${quickAllAppsSelected ? ' apps-badge--all' : ' apps-badge--custom'}`}>
+                    {quickAppsBadge}
+                  </span>
+                  <button
+                    type="button"
+                    className="apps-expand-btn"
+                    onClick={() => setQuickAppsExpanded((v) => !v)}
+                    aria-expanded={quickAppsExpanded}
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                  >
+                    {quickAppsExpanded ? '▲' : '＋'}
+                  </button>
+                </span>
               </div>
+              {quickAppsExpanded && (
+                <div className="apps-list" style={{ margin: '0.25rem 0 0.5rem' }}>
+                  {!quickAllAppsSelected && (
+                    <button
+                      type="button"
+                      className="apps-select-all-btn"
+                      onClick={() => setQuickSelectedApps([...COMMON_APPS])}
+                    >
+                      Select all
+                    </button>
+                  )}
+                  {COMMON_APPS.map((app) => (
+                    <label key={app} className="apps-list-row">
+                      <input
+                        type="checkbox"
+                        checked={quickSelectedApps.includes(app)}
+                        onChange={() => toggleQuickApp(app)}
+                        className="apps-checkbox"
+                      />
+                      <span className="apps-list-name">{app}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button"
