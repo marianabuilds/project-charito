@@ -1005,6 +1005,118 @@ input[type='range'] {
   max-width: 24rem;
 }
 
+/* ── Insights section header row (title + inline link) ──────────────────── */
+.insights-section-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+
+.insights-section-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  margin: 0 0 0.75rem;
+}
+
+.insights-inline-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--accent);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.insights-inline-link:hover { opacity: 0.75; }
+
+/* ── Top Apps list ───────────────────────────────────────────────────────── */
+.top-apps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.top-apps-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr 3rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.top-apps-row:last-child { border-bottom: none; }
+.top-apps-row:hover { background: var(--accent-bg); }
+
+.top-apps-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-apps-bar-wrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.top-apps-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+.top-apps-time {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.top-apps-sync-note {
+  font-size: 0.7rem;
+  color: var(--text-m);
+  margin: 0.5rem 0 0;
+  text-align: right;
+}
+
+/* Loading skeletons */
+.top-apps-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.top-apps-skeleton-row {
+  height: 3rem;
+  background: var(--surface);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 /* ── Home header illustration ─────────────────────────────────────────────── */
 .home-header-row {
   display: flex;

@@ -29,7 +29,9 @@ export const App: React.FC = () => {
         <React.Suspense fallback={<div className="view" />}>
           {view === 'home' && <HomeView onNavigateToBlocks={() => setView('blocks')} />}
           {view === 'blocks' && <BlocksView />}
-          {view === 'insights' && <InsightsView />}
+          {view === 'insights' && (
+            <InsightsView onNavigateToBlocks={() => setView('blocks')} />
+          )}
           {view === 'settings' && <SettingsView />}
         </React.Suspense>
         <TabBar active={view} onChange={setView} />
