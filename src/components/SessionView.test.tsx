@@ -10,8 +10,7 @@ vi.mock('../state/settingsStore', () => {
     languageCode: 'es-PE',
     mode: 'gentle',
     selectedMessageId: 'pe_oye_compadre',
-    customMessage: '',
-    customMessageAudio: '',
+    customMessages: [],
     userName: '',
     goals: [],
   };

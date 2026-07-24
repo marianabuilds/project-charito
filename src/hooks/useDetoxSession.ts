@@ -28,24 +28,28 @@ export function useDetoxSession() {
   }, []);
 
   const pickMessage = useCallback((): string | null => {
-    if (settings.selectedMessageId === 'custom') {
-      return settings.customMessage || null;
-    }
-    const preset = culturalPresets.find(
-      (p) => p.cultureCode === settings.cultureCode,
-    );
-    if (!preset) return null;
-
     if (settings.selectedMessageId) {
-      const msg = preset.messages.find((m) => m.id === settings.selectedMessageId);
-      return msg?.text ?? null;
+      // Check if it matches a custom message in the array
+      const customMsg = settings.customMessages.find((m) => m.id === settings.selectedMessageId);
+      if (customMsg) {
+        return customMsg.text || 'Your custom reminder';
+      }
+      // Look up in cultural preset messages
+      const preset = culturalPresets.find(
+        (p) => p.cultureCode === settings.cultureCode,
+      );
+      const msg = preset?.messages.find((m) => m.id === settings.selectedMessageId);
+      if (msg) return msg.text;
     }
 
     // Random from all messages in this culture
-    if (preset.messages.length === 0) return null;
+    const preset = culturalPresets.find(
+      (p) => p.cultureCode === settings.cultureCode,
+    );
+    if (!preset || preset.messages.length === 0) return null;
     const index = Math.floor(Math.random() * preset.messages.length);
     return preset.messages[index].text;
-  }, [settings.cultureCode, settings.selectedMessageId, settings.customMessage]);
+  }, [settings.cultureCode, settings.selectedMessageId, settings.customMessages]);
 
   const tick = useCallback(() => {
     setElapsedSeconds((prev) => {

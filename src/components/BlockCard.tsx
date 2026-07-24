@@ -4,7 +4,6 @@ import type { DetoxBlock, BlockingMethod } from '../state/blockStore';
 import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { toastStore } from '../state/toastStore';
 
 // Single-letter day labels: S M T W T F S
@@ -155,20 +154,6 @@ export const BlockCard: React.FC = () => {
   const [blocks, setBlocks] = React.useState<DetoxBlock[]>(blockStore.get().blocks);
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
-  const [formCustomAudio, setFormCustomAudio] = React.useState<string>(
-    () => settingsStore.get().customMessageAudio,
-  );
-
-  const {
-    isRecording: isRecordingMsg,
-    isSupported: hasMic,
-    startRecording,
-    stopRecording,
-    discardRecording,
-  } = useAudioRecorder((dataUrl) => {
-    setFormCustomAudio(dataUrl);
-    settingsStore.set({ customMessageAudio: dataUrl });
-  });
 
   // Preview a message via TTS
   const [previewingSpeech, setPreviewingSpeech] = React.useState(false);
@@ -652,10 +637,15 @@ export const BlockCard: React.FC = () => {
                     {m.text.length > 55 ? m.text.slice(0, 52) + '…' : m.text}
                   </option>
                 ))}
-                <option value="custom">Custom…</option>
+                {settings.customMessages.map((cm) => (
+                  <option key={cm.id} value={cm.id}>
+                    Custom: {cm.label}
+                  </option>
+                ))}
+                <option value="custom">Custom (type below)…</option>
               </select>
               {/* TTS preview button for the selected non-custom message */}
-              {form.messageId && form.messageId !== 'custom' && (
+              {form.messageId && form.messageId !== 'custom' && !settings.customMessages.find((m) => m.id === form.messageId) && (
                 <button
                   type="button"
                   onClick={previewingSpeech ? stopPreview : () => {
@@ -691,77 +681,6 @@ export const BlockCard: React.FC = () => {
                 value={form.customMessage}
                 onChange={(e) => setForm((f) => ({ ...f, customMessage: e.target.value }))}
               />
-              {/* Mic recording */}
-              {hasMic && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginTop: '0.5rem',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={isRecordingMsg ? stopRecording : () => void startRecording()}
-                    aria-label={isRecordingMsg ? 'Stop recording' : 'Record audio message'}
-                    style={{
-                      background: isRecordingMsg ? '#e53e3e' : 'none',
-                      color: isRecordingMsg ? '#fff' : 'inherit',
-                      border: '1px solid currentColor',
-                      borderRadius: '50%',
-                      width: 28,
-                      height: 28,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.85rem',
-                      flexShrink: 0,
-                    }}
-                  >
-                    🎤
-                  </button>
-                  {isRecordingMsg && (
-                    <span style={{ fontSize: '0.75rem', color: '#e53e3e' }}>Recording…</span>
-                  )}
-                </div>
-              )}
-              {/* Recorded audio playback + discard */}
-              {formCustomAudio && !isRecordingMsg && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginTop: '0.5rem',
-                  }}
-                >
-                  <audio
-                    src={formCustomAudio}
-                    controls
-                    style={{ height: 28, flex: 1, minWidth: 0 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      discardRecording();
-                      setFormCustomAudio('');
-                      settingsStore.set({ customMessageAudio: '' });
-                    }}
-                    aria-label="Discard recording"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      flexShrink: 0,
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
             </div>
           )}
 

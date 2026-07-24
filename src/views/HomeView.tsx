@@ -72,11 +72,17 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
       const settings = settingsStore.get();
       let messageText: string | null = null;
 
-      if (block.messageId === 'custom') {
-        messageText = block.customMessage || null;
-      } else if (block.messageId) {
-        const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
-        messageText = preset?.messages.find((m) => m.id === block.messageId)?.text ?? null;
+      if (block.messageId) {
+        // Check custom messages in settings store
+        const customMsg = settings.customMessages.find((m) => m.id === block.messageId);
+        if (customMsg) {
+          messageText = customMsg.text || null;
+        } else if (block.messageId === 'custom') {
+          messageText = block.customMessage || null;
+        } else {
+          const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
+          messageText = preset?.messages.find((m) => m.id === block.messageId)?.text ?? null;
+        }
       } else {
         // Random message from current culture
         const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
@@ -128,6 +134,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
         )}
       </header>
 
+      <section aria-label="Active session">
+        <SessionView />
+      </section>
+
       <section aria-label="This week" className="card">
         <WeekStrip onDaySelect={() => {}} />
         <p className="week-strip-desc">Tap a day to see your scheduled detox blocks.</p>
@@ -138,10 +148,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
         >
           ＋ Schedule a block
         </button>
-      </section>
-
-      <section aria-label="Active session">
-        <SessionView />
       </section>
     </div>
   );

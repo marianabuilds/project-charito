@@ -11,8 +11,7 @@ function getDefaultSettings(): DetoxSettings {
     languageCode: defaultPreset.languageCode,
     mode: 'gentle',
     selectedMessageId: null,
-    customMessage: '',
-    customMessageAudio: '',
+    customMessages: [],
     userName: '',
     goals: [],
   };
@@ -32,15 +31,18 @@ function loadSettings(): DetoxSettings {
     } else if (Array.isArray(parsed.selectedMessageIds) && parsed.selectedMessageIds.length > 0) {
       selectedMessageId = parsed.selectedMessageIds[0] as string;
     }
+    // Migrate legacy 'custom' selectedMessageId
+    if (selectedMessageId === 'custom') {
+      selectedMessageId = null;
+    }
     return {
       ...defaults,
       ...(typeof parsed.durationMinutes === 'number' ? { durationMinutes: parsed.durationMinutes } : {}),
       ...(typeof parsed.cultureCode === 'string' ? { cultureCode: parsed.cultureCode } : {}),
       ...(typeof parsed.languageCode === 'string' ? { languageCode: parsed.languageCode } : {}),
       ...(parsed.mode === 'gentle' || parsed.mode === 'strict' ? { mode: parsed.mode } : {}),
-      ...(typeof parsed.customMessage === 'string' ? { customMessage: parsed.customMessage } : {}),
-      ...(typeof parsed.customMessageAudio === 'string' ? { customMessageAudio: parsed.customMessageAudio } : {}),
       selectedMessageId,
+      ...(Array.isArray(parsed.customMessages) ? { customMessages: parsed.customMessages } : {}),
       ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
       ...(Array.isArray(parsed.goals) ? { goals: parsed.goals as string[] } : {}),
     };

@@ -27,7 +27,7 @@
   --shadow-accent: none;
 
   /* Typography */
-  --font-heading: 'EB Garamond', Georgia, serif;
+  --font-heading: 'Atkinson Hyperlegible', system-ui, sans-serif;
   --font-body:    'Atkinson Hyperlegible', system-ui, sans-serif;
 
   font-family: var(--font-body);

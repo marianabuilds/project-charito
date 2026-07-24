@@ -1899,11 +1899,129 @@ input[type='range'] {
   line-height: 1.45;
 }
 
+/* ── Quick method 2×2 grid ───────────────────────────────────────────────── */
+.quick-method-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  padding: 0 1.375rem;
+  margin-bottom: 1rem;
+}
+
+.quick-method-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.875rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: border-color 0.15s, background 0.15s;
+}
+.quick-method-card:hover { border-color: var(--accent-border); background: var(--accent-bg); }
+.quick-method-card--active {
+  border-color: var(--accent) !important;
+  background: var(--accent-bg) !important;
+}
+
+.quick-method-card-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-h);
+  display: block;
+}
+.quick-method-card-desc {
+  font-size: 0.8125rem;
+  color: var(--accent);
+  display: block;
+}
+.quick-method-card-example {
+  font-size: 0.7rem;
+  color: var(--text-m);
+  display: block;
+  margin-top: 0.2rem;
+}
+
+/* Method config area */
+.quick-method-config {
+  padding: 0 1.375rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Reminder row */
+.quick-reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.375rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+.quick-reminder-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-m);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 4.5rem;
+}
+.quick-message-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+.quick-preview-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-m);
+  padding: 0.1rem 0.4rem;
+  flex-shrink: 0;
+}
+.quick-preview-btn:hover { color: var(--text-h); }
+
+/* Apps row inside quick block */
+.quick-apps-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1.375rem;
+  border-bottom: 1px solid var(--border);
+}
+.apps-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Summary line */
+.quick-summary-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.375rem 0;
+  font-size: 0.8125rem;
+  color: var(--text-m);
+}
+.quick-summary-method {
+  font-weight: 700;
+  color: var(--text-h);
+}
+.quick-summary-value {
+  color: var(--accent);
+}
+
 /* ── Did-you-know strip ──────────────────────────────────────────────────── */
 .did-you-know-strip {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.375rem;
   margin-top: 0.625rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border);
@@ -1917,13 +2035,9 @@ input[type='range'] {
 .did-you-know-label {
   font-weight: 700;
   color: var(--text-h);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.did-you-know-text {
-  flex: 1;
-}
+.did-you-know-text {}
 
 .did-you-know-dismiss {
   background: none;
@@ -1941,11 +2055,10 @@ input[type='range'] {
 .home-username-heading {
   font-family: var(--font-heading);
   font-size: clamp(1.75rem, 6vw, 2.5rem);
-  font-weight: 400;
+  font-weight: 700;
   color: var(--text-h);
   margin: 0.125rem 0 0;
   line-height: 1.15;
-  font-style: italic;
 }
 
 /* ── Block method inline expansion ───────────────────────────────────────── */
@@ -2222,6 +2335,146 @@ input[type='range'] {
 .onboarding-dot--active {
   background: var(--accent);
   transform: scale(1.3);
+}
+
+/* ── Onboarding — new screen elements ───────────────────────────────────── */
+
+/* Back button */
+.onboarding-back-btn {
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  color: var(--text-m);
+  cursor: pointer;
+  padding: 0;
+  align-self: flex-start;
+  line-height: 1;
+}
+.onboarding-back-btn:hover { color: var(--text-h); }
+
+/* Leaf cluster */
+.onboarding-leaf-cluster {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+.onboarding-leaf-side { opacity: 0.55; display: flex; }
+.onboarding-leaf--center { opacity: 1; }
+
+/* Benefit pills */
+.onboarding-benefit-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  max-width: 22rem;
+}
+.onboarding-benefit-pill {
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border, rgba(90,122,90,0.35));
+  color: var(--accent);
+  background: var(--accent-bg);
+  white-space: nowrap;
+}
+
+/* How-it-works cards */
+.onboarding-how-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+}
+.onboarding-how-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.onboarding-how-emoji {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.onboarding-how-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0 0 0.25rem;
+}
+.onboarding-how-body {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Live preview mock phone */
+.onboarding-preview-phone {
+  width: 11rem;
+  border-radius: 1.5rem;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+.onboarding-preview-notch {
+  width: 4rem;
+  height: 0.75rem;
+  background: var(--border);
+  border-radius: 0 0 0.75rem 0.75rem;
+  margin: 0.5rem auto 0;
+}
+.onboarding-preview-screen {
+  padding: 1rem 0.875rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.onboarding-preview-mode {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-m);
+  margin: 0;
+}
+.onboarding-preview-timer {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.onboarding-preview-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.onboarding-preview-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+.onboarding-preview-msg {
+  font-size: 0.7rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.45;
+  text-align: center;
 }
 
 /* ── Screen time self-report ──────────────────────────────────────────────── */

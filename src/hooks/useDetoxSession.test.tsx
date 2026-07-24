@@ -10,8 +10,7 @@ let mockSettings: DetoxSettings = {
   languageCode: 'es-PE',
   mode: 'gentle',
   selectedMessageId: null,
-  customMessage: '',
-  customMessageAudio: '',
+  customMessages: [],
   userName: '',
   goals: [],
 };
@@ -50,8 +49,7 @@ describe('useDetoxSession', () => {
       languageCode: 'es-PE',
       mode: 'gentle',
       selectedMessageId: null,
-      customMessage: '',
-      customMessageAudio: '',
+      customMessages: [],
       userName: '',
       goals: [],
     };

@@ -1,15 +1,21 @@
 export type DetoxMode = 'gentle' | 'strict';
 
+export interface CustomMessage {
+  id: string;           // crypto.randomUUID()
+  text: string;         // typed text (may be empty if audio only)
+  audioDataUrl: string; // base64 data URL (may be empty if text only)
+  label: string;        // auto-label: first 30 chars of text, or "Recording N"
+}
+
 export interface DetoxSettings {
   durationMinutes: number;
   cultureCode: string; // e.g. 'pe_PE'
   languageCode: string; // e.g. 'es-PE'
   mode: DetoxMode;
-  /** ID of the selected message, null = random, 'custom' = use customMessage */
+  /** ID of the selected message, null = random */
   selectedMessageId: string | null;
-  customMessage: string;
-  /** Base64 data URL of a recorded audio message; empty string = none */
-  customMessageAudio: string;
+  /** Array of custom reminder messages */
+  customMessages: CustomMessage[];
   /** User's display name; empty string = not set */
   userName: string;
   /** Goals selected during onboarding, e.g. ['sleep', 'focus'] */
