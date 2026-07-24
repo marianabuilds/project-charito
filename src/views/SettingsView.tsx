@@ -2,7 +2,6 @@ import React from 'react';
 import { CultureSelector } from '../components/CultureSelector';
 import { ModeToggle } from '../components/ModeToggle';
 import { MessageSelector } from '../components/MessageSelector';
-import { settingsStore } from '../state/settingsStore';
 
 const StatsCard: React.FC = () => (
   <div className="stats-card card">
@@ -17,32 +16,6 @@ const StatsCard: React.FC = () => (
     </div>
   </div>
 );
-
-const UserNameField: React.FC = () => {
-  const [value, setValue] = React.useState(settingsStore.get().userName);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setValue(e.target.value);
-    settingsStore.set({ userName: e.target.value });
-  };
-
-  return (
-    <div className="settings-name-field">
-      <label className="field-label" htmlFor="settings-user-name">
-        Your name
-      </label>
-      <input
-        id="settings-user-name"
-        type="text"
-        className="block-text-input"
-        placeholder="Enter your name"
-        value={value}
-        onChange={handleChange}
-        onBlur={handleChange}
-      />
-    </div>
-  );
-};
 
 type NotifStatus = 'idle' | 'granted' | 'denied' | 'unsupported';
 
@@ -208,6 +181,15 @@ const PermissionsSection: React.FC = () => {
 };
 
 export const SettingsView: React.FC = () => {
+  const handleRevisitOnboarding = () => {
+    try {
+      localStorage.removeItem('charito:onboarded:v1');
+    } catch {
+      // best-effort
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="view">
       <header className="app-header">
@@ -218,8 +200,6 @@ export const SettingsView: React.FC = () => {
         </p>
       </header>
 
-      <UserNameField />
-
       <StatsCard />
 
       <div className="settings-form card">
@@ -229,6 +209,22 @@ export const SettingsView: React.FC = () => {
       </div>
 
       <PermissionsSection />
+
+      <div className="permissions-section">
+        <p className="permissions-section-title">ACCOUNT</p>
+        <div className="permissions-row">
+          <div className="permissions-row-left">
+            <button
+              type="button"
+              className="button button-ghost"
+              style={{ width: '100%', textAlign: 'left' }}
+              onClick={handleRevisitOnboarding}
+            >
+              Revisit onboarding
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

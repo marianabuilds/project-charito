@@ -86,6 +86,14 @@ export const Onboarding: React.FC = () => {
             <p className="onboarding-subtext">
               Charito helps you spend time intentionally — with reminders rooted in your culture.
             </p>
+            <input
+              type="text"
+              className="block-text-input"
+              placeholder="What's your name?"
+              defaultValue={settingsStore.get().userName}
+              onChange={(e) => settingsStore.set({ userName: e.target.value })}
+              style={{ marginBottom: '0.75rem' }}
+            />
             <button
               type="button"
               className="button button-primary onboarding-btn"

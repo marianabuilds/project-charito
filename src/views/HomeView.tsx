@@ -1,7 +1,6 @@
 import React from 'react';
 import { WeekStrip } from '../components/WeekStrip';
 import { SessionView } from '../components/SessionView';
-import { BlockCard } from '../components/BlockCard';
 import { LeafIcon } from '../components/LeafIcon';
 import { useDetoxBlocks } from '../hooks/useDetoxBlocks';
 import { useSession } from '../state/SessionContext';
@@ -19,7 +18,11 @@ const ROTATING_MESSAGES = [
   'Presence is the rarest gift you can give yourself.',
 ];
 
-export const HomeView: React.FC = () => {
+interface HomeViewProps {
+  onNavigateToBlocks: () => void;
+}
+
+export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
   const session = useSession();
 
   const [msgIndex, setMsgIndex] = React.useState(0);
@@ -83,14 +86,18 @@ export const HomeView: React.FC = () => {
 
       <section aria-label="This week" className="card">
         <WeekStrip onDaySelect={() => {}} />
+        <p className="week-strip-desc">Tap a day to see your scheduled detox blocks.</p>
+        <button
+          type="button"
+          className="week-strip-cta"
+          onClick={onNavigateToBlocks}
+        >
+          ＋ Schedule a block
+        </button>
       </section>
 
       <section aria-label="Active session">
         <SessionView />
-      </section>
-
-      <section aria-label="Detox blocks">
-        <BlockCard />
       </section>
     </div>
   );

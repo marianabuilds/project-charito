@@ -133,3 +133,29 @@
 }
 
 .strict-overlay-button:hover { background: var(--accent-dim); }
+
+/* Week strip description + CTA */
+.week-strip-desc {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  margin: 0.5rem 0 0;
+}
+
+.week-strip-cta {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.week-strip-cta:hover {
+  color: var(--accent-dim);
+  text-decoration: underline;
+}
+

@@ -9,6 +9,9 @@ import './App.css';
 const HomeView = React.lazy(() =>
   import('./views/HomeView').then((m) => ({ default: m.HomeView })),
 );
+const BlocksView = React.lazy(() =>
+  import('./views/BlocksView').then((m) => ({ default: m.BlocksView })),
+);
 const SettingsView = React.lazy(() =>
   import('./views/SettingsView').then((m) => ({ default: m.SettingsView })),
 );
@@ -23,7 +26,8 @@ export const App: React.FC = () => {
     <SessionProvider>
       <div className="app-root">
         <React.Suspense fallback={<div className="view" />}>
-          {view === 'home' && <HomeView />}
+          {view === 'home' && <HomeView onNavigateToBlocks={() => setView('blocks')} />}
+          {view === 'blocks' && <BlocksView />}
           {view === 'insights' && <InsightsView />}
           {view === 'settings' && <SettingsView />}
         </React.Suspense>

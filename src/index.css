@@ -1,40 +1,35 @@
-/* ── Tierra design tokens ─────────────────────────────────────────────────── */
+/* ── Grounded design tokens ─────────────────────────────────────────────────── */
 :root {
   /* Backgrounds */
-  --bg:        #FBF5EC;
-  --surface:   #FFFFFF;
-  --surface-2: #F5EBD9;
-  --border:    #E8D8C4;
-  --border-soft: rgba(224, 98, 42, 0.15);
+  --bg:        #F4F1EC;   /* warm linen */
+  --surface:   #FAFAF8;   /* near white */
+  --surface-2: #EDE9E2;   /* warm stone */
+  --border:    #D9D4CB;   /* soft stone */
+  --border-soft: rgba(90, 110, 90, 0.15);
 
-  /* Accent — terracotta */
-  --accent:        #E0622A;
-  --accent-dim:    #C44E1E;
-  --accent-bg:     rgba(224, 98, 42, 0.08);
-  --accent-border: rgba(224, 98, 42, 0.30);
+  /* Accent — muted sage green */
+  --accent:        #5A7A5A;   /* forest sage */
+  --accent-dim:    #476347;
+  --accent-bg:     rgba(90, 122, 90, 0.08);
+  --accent-border: rgba(90, 122, 90, 0.28);
 
-  /* Secondary — warm gold */
-  --gold:    #C49A3C;
-  --gold-bg: rgba(196, 154, 60, 0.10);
+  /* Secondary — warm clay */
+  --gold:    #9E7E5A;   /* warm clay/sienna */
+  --gold-bg: rgba(158, 126, 90, 0.10);
 
   /* Text */
-  --text-h: #2C1A0E;
-  --text:   #6B4F38;
-  --text-m: #A08060;
+  --text-h: #2A2A25;   /* near black, warm */
+  --text:   #5A5348;   /* warm brown-grey */
+  --text-m: #9A9188;   /* muted warm grey */
 
-  /* Elevation */
-  --shadow:
-    0 2px 8px  rgba(60, 30, 10, 0.08),
-    0 8px 24px rgba(60, 30, 10, 0.06);
-  --shadow-accent:
-    0 0 0 1px rgba(224, 98, 42, 0.18),
-    0 8px 24px rgba(224, 98, 42, 0.12);
+  /* Elevation — no shadows, just borders */
+  --shadow: none;
+  --shadow-accent: none;
 
   /* Typography */
   --font-heading: 'Fraunces', Georgia, serif;
   --font-body:    'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 
-  /* Base */
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.6;
