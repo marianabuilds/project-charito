@@ -5,7 +5,11 @@ export interface DetoxSettings {
   cultureCode: string; // e.g. 'pe_PE'
   languageCode: string; // e.g. 'es-PE'
   mode: DetoxMode;
-  selectedMessageIds: string[];
+  /** ID of the selected message, null = random, 'custom' = use customMessage */
+  selectedMessageId: string | null;
+  customMessage: string;
+  /** User's display name; empty string = not set */
+  userName: string;
 }
 
 export interface CulturalMessage {

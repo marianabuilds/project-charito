@@ -1,7 +1,25 @@
 import React from 'react';
-import { useDetoxSession } from '../hooks/useDetoxSession';
+import { useSession } from '../state/SessionContext';
 import { settingsStore } from '../state/settingsStore';
+import { culturalPresets } from '../data/culturalPresets';
 import { StrictOverlay } from './StrictOverlay';
+
+type QuickBlockingMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
+type QuickStep = 'method' | 'config' | 'message' | 'confirm';
+
+const QUICK_METHODS: { id: QuickBlockingMethod; title: string; description: string }[] = [
+  { id: 'duration', title: 'Duration', description: 'Stay offline for a set time' },
+  { id: 'set-hours', title: 'Set hours', description: 'Block during a time window' },
+  { id: 'usage-limit', title: 'Usage limit', description: 'Cap daily screen time' },
+  { id: 'launch-count', title: 'Launch count', description: 'Limit how many times you open apps' },
+];
+
+function formatDuration(minutes: number): string {
+  if (minutes <= 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -12,6 +30,7 @@ function formatTime(seconds: number): string {
 export const SessionView: React.FC = () => {
   const {
     status,
+    elapsedSeconds,
     remainingSeconds,
     isStrict,
     currentMessageText,
@@ -19,9 +38,20 @@ export const SessionView: React.FC = () => {
     pause,
     resume,
     reset,
-  } = useDetoxSession();
+  } = useSession();
 
   const [overlayVisible, setOverlayVisible] = React.useState(false);
+
+  // 4-step quick flow state
+  const [quickStep, setQuickStep] = React.useState<QuickStep>('method');
+  const [quickMethod, setQuickMethod] = React.useState<QuickBlockingMethod>('duration');
+  const [quickDuration, setQuickDuration] = React.useState(30);
+  const [quickFromTime, setQuickFromTime] = React.useState('09:00');
+  const [quickUntilTime, setQuickUntilTime] = React.useState('17:00');
+  const [quickUsageLimit, setQuickUsageLimit] = React.useState(60);
+  const [quickLaunchCount, setQuickLaunchCount] = React.useState(10);
+  const [quickMessageId, setQuickMessageId] = React.useState('');
+  const [quickCustomMessage, setQuickCustomMessage] = React.useState('');
 
   React.useEffect(() => {
     if (status === 'completed' && isStrict) {
@@ -34,42 +64,364 @@ export const SessionView: React.FC = () => {
     reset();
   };
 
+  const handleStartNow = () => {
+    // Apply duration if method is duration-based
+    if (quickMethod === 'duration') {
+      settingsStore.set({ durationMinutes: quickDuration });
+    }
+    // Apply chosen message
+    if (quickMessageId === 'custom') {
+      settingsStore.set({ selectedMessageId: 'custom', customMessage: quickCustomMessage });
+    } else if (quickMessageId) {
+      settingsStore.set({ selectedMessageId: quickMessageId, customMessage: '' });
+    } else {
+      settingsStore.set({ selectedMessageId: null, customMessage: '' });
+    }
+    // Reset step for next time
+    setQuickStep('method');
+    start();
+  };
+
   const settings = settingsStore.get();
   const totalSeconds = settings.durationMinutes * 60;
-  const progress = totalSeconds > 0
-    ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100
-    : 0;
+  const progress =
+    totalSeconds > 0 ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100 : 0;
+
+  const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
+  const selectedMethodMeta = QUICK_METHODS.find((m) => m.id === quickMethod)!;
+
+  // Build message preview for confirm step
+  let quickMessagePreview = 'Random';
+  if (quickMessageId === 'custom') {
+    quickMessagePreview = quickCustomMessage.trim() || 'Custom…';
+  } else if (quickMessageId) {
+    const msg = preset?.messages.find((m) => m.id === quickMessageId);
+    if (msg) {
+      quickMessagePreview = msg.text.length > 45 ? msg.text.slice(0, 42) + '…' : msg.text;
+    }
+  }
+
+  // ── Idle state: 4-step flow ─────────────────────────────────────────────
+  if (status === 'idle') {
+    return (
+      <div className="quick-session-card">
+        {/* ── Step 1: Choose blocking method ──────────────────────────── */}
+        {quickStep === 'method' && (
+          <>
+            <p className="quick-section-label">Quick offline block</p>
+            <p className="quick-section-title">How do you want to block?</p>
+            <div className="quick-method-list">
+              {QUICK_METHODS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className="quick-method-row"
+                  onClick={() => {
+                    setQuickMethod(m.id);
+                    setQuickStep('config');
+                  }}
+                >
+                  <span className="quick-method-name">{m.title}</span>
+                  <span className="quick-method-desc">{m.description}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Step 2: Method-specific config ──────────────────────────── */}
+        {quickStep === 'config' && (
+          <>
+            <button
+              type="button"
+              className="quick-back-btn"
+              onClick={() => setQuickStep('method')}
+            >
+              ← Back
+            </button>
+            <p className="quick-section-title">{selectedMethodMeta.title}</p>
+
+            {quickMethod === 'duration' && (
+              <div className="quick-config-block">
+                <p className="quick-duration-big">{formatDuration(quickDuration)}</p>
+                <input
+                  type="range"
+                  className="quick-range"
+                  min={5}
+                  max={120}
+                  step={5}
+                  value={quickDuration}
+                  onChange={(e) => setQuickDuration(Number(e.target.value))}
+                  aria-label="Session duration"
+                  aria-valuetext={formatDuration(quickDuration)}
+                />
+              </div>
+            )}
+
+            {quickMethod === 'set-hours' && (
+              <div className="quick-config-block">
+                <div className="quick-time-row">
+                  <div className="quick-time-field">
+                    <label className="quick-time-label" htmlFor="qf-from">From</label>
+                    <input
+                      id="qf-from"
+                      type="time"
+                      className="quick-time-input"
+                      value={quickFromTime}
+                      onChange={(e) => setQuickFromTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="quick-time-field">
+                    <label className="quick-time-label" htmlFor="qf-until">Until</label>
+                    <input
+                      id="qf-until"
+                      type="time"
+                      className="quick-time-input"
+                      value={quickUntilTime}
+                      onChange={(e) => setQuickUntilTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {quickMethod === 'usage-limit' && (
+              <div className="quick-config-block">
+                <p className="quick-duration-big">{quickUsageLimit} min</p>
+                <p className="quick-config-hint">Max minutes per day</p>
+                <input
+                  type="range"
+                  className="quick-range"
+                  min={15}
+                  max={240}
+                  step={15}
+                  value={quickUsageLimit}
+                  onChange={(e) => setQuickUsageLimit(Number(e.target.value))}
+                  aria-label="Max minutes per day"
+                />
+              </div>
+            )}
+
+            {quickMethod === 'launch-count' && (
+              <div className="quick-config-block">
+                <p className="quick-config-hint">Max opens per day</p>
+                <div className="quick-stepper">
+                  <button
+                    type="button"
+                    className="quick-stepper-btn"
+                    onClick={() => setQuickLaunchCount((n) => Math.max(1, n - 1))}
+                    aria-label="Decrease"
+                  >
+                    −
+                  </button>
+                  <span className="quick-duration-big">{quickLaunchCount}</span>
+                  <button
+                    type="button"
+                    className="quick-stepper-btn"
+                    onClick={() => setQuickLaunchCount((n) => Math.min(50, n + 1))}
+                    aria-label="Increase"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="button button-primary quick-start-btn"
+              onClick={() => setQuickStep('message')}
+            >
+              Next →
+            </button>
+          </>
+        )}
+
+        {/* ── Step 3: Pick a message ───────────────────────────────────── */}
+        {quickStep === 'message' && (
+          <>
+            <button
+              type="button"
+              className="quick-back-btn"
+              onClick={() => setQuickStep('config')}
+            >
+              ← Back
+            </button>
+            <p className="quick-section-title">Choose a message</p>
+            <div className="quick-message-list">
+              {/* Random (default) */}
+              <label className="quick-message-row">
+                <input
+                  type="radio"
+                  name="quick-message"
+                  value=""
+                  checked={quickMessageId === ''}
+                  onChange={() => setQuickMessageId('')}
+                  className="quick-message-radio"
+                />
+                <span className="quick-message-text">Random</span>
+              </label>
+              {/* Cultural messages */}
+              {preset?.messages.map((m) => (
+                <label key={m.id} className="quick-message-row">
+                  <input
+                    type="radio"
+                    name="quick-message"
+                    value={m.id}
+                    checked={quickMessageId === m.id}
+                    onChange={() => setQuickMessageId(m.id)}
+                    className="quick-message-radio"
+                  />
+                  <span className="quick-message-text">{m.text}</span>
+                </label>
+              ))}
+              {/* Custom */}
+              <label className="quick-message-row">
+                <input
+                  type="radio"
+                  name="quick-message"
+                  value="custom"
+                  checked={quickMessageId === 'custom'}
+                  onChange={() => setQuickMessageId('custom')}
+                  className="quick-message-radio"
+                />
+                <span className="quick-message-text">Custom…</span>
+              </label>
+              {quickMessageId === 'custom' && (
+                <input
+                  type="text"
+                  className="block-text-input quick-custom-msg-input"
+                  placeholder="Type your reminder…"
+                  value={quickCustomMessage}
+                  onChange={(e) => setQuickCustomMessage(e.target.value)}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              className="button button-primary quick-start-btn"
+              onClick={() => setQuickStep('confirm')}
+            >
+              Next →
+            </button>
+          </>
+        )}
+
+        {/* ── Step 4: Confirm ─────────────────────────────────────────── */}
+        {quickStep === 'confirm' && (
+          <>
+            <button
+              type="button"
+              className="quick-back-btn"
+              onClick={() => setQuickStep('method')}
+            >
+              ← Back
+            </button>
+            <p className="quick-section-title">Ready to start?</p>
+            <div className="quick-confirm-summary">
+              <div className="quick-confirm-row">
+                <span className="quick-confirm-label">Method</span>
+                <span className="quick-confirm-value">{selectedMethodMeta.title}</span>
+              </div>
+              {quickMethod === 'duration' && (
+                <div className="quick-confirm-row">
+                  <span className="quick-confirm-label">Duration</span>
+                  <span className="quick-confirm-value">{formatDuration(quickDuration)}</span>
+                </div>
+              )}
+              {quickMethod === 'set-hours' && (
+                <div className="quick-confirm-row">
+                  <span className="quick-confirm-label">Window</span>
+                  <span className="quick-confirm-value">{quickFromTime} – {quickUntilTime}</span>
+                </div>
+              )}
+              {quickMethod === 'usage-limit' && (
+                <div className="quick-confirm-row">
+                  <span className="quick-confirm-label">Limit</span>
+                  <span className="quick-confirm-value">{quickUsageLimit} min/day</span>
+                </div>
+              )}
+              {quickMethod === 'launch-count' && (
+                <div className="quick-confirm-row">
+                  <span className="quick-confirm-label">Opens</span>
+                  <span className="quick-confirm-value">{quickLaunchCount}/day</span>
+                </div>
+              )}
+              <div className="quick-confirm-row">
+                <span className="quick-confirm-label">Message</span>
+                <span className="quick-confirm-value">{quickMessagePreview}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="button button-primary quick-start-btn"
+              onClick={handleStartNow}
+            >
+              Start now
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── Completed state ─────────────────────────────────────────────────────
+  if (status === 'completed' && !overlayVisible) {
+    const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    return (
+      <div className="session-complete-card card">
+        <div className="session-complete-icon" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="18" fill="rgba(196,154,60,0.12)" stroke="#C49A3C" strokeWidth="1.5" />
+            <path d="M13 20l5 5 9-10" stroke="#C49A3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <p className="session-complete-title">Well done.</p>
+        <p className="session-complete-body">
+          You reclaimed {elapsedMinutes} {elapsedMinutes === 1 ? 'minute' : 'minutes'}.
+        </p>
+        {currentMessageText && (
+          <p className="session-complete-quote">
+            <em>"{currentMessageText}"</em>
+          </p>
+        )}
+        <button type="button" className="button button-primary" onClick={reset}>
+          Start another
+        </button>
+      </div>
+    );
+  }
+
+  // ── Running / paused state ──────────────────────────────────────────────
+  const modeLabel = isStrict ? 'Focused block' : 'Soft reminders';
 
   return (
-    <div className="session-view">
-      <h2 className="session-heading">Session</h2>
-      <p className="session-mode">
-        Mode: <strong>{settings.mode === 'strict' ? 'Strict' : 'Gentle'}</strong>
-      </p>
+    <div className="session-view card">
+      <div className="session-view-top">
+        <p className="session-mode">{modeLabel}</p>
+        <p
+          className="session-timer"
+          aria-live="polite"
+          aria-label="Time remaining"
+        >
+          {formatTime(remainingSeconds)}
+        </p>
 
-      <p className="session-timer" aria-live="polite" aria-label="Time remaining">
-        {formatTime(remainingSeconds)}
-      </p>
-
-      <div
-        className="session-progress"
-        role="progressbar"
-        aria-valuenow={Math.round(progress)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
         <div
-          className="session-progress-bar"
-          style={{ width: `${progress}%` }}
-        />
+          className="session-progress"
+          role="progressbar"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className="session-progress-bar"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
 
       <div className="session-controls">
-        {status === 'idle' && (
-          <button type="button" className="button button-primary" onClick={start}>
-            Start session
-          </button>
-        )}
         {status === 'running' && (
           <button type="button" className="button button-secondary" onClick={pause}>
             Pause
@@ -80,21 +432,14 @@ export const SessionView: React.FC = () => {
             Resume
           </button>
         )}
-        {status === 'completed' && !isStrict && (
-          <button type="button" className="button button-primary" onClick={reset}>
-            Start again
-          </button>
-        )}
-        {status !== 'idle' && (
-          <button type="button" className="button button-ghost" onClick={reset}>
-            Reset
-          </button>
-        )}
+        <button type="button" className="button button-ghost" onClick={reset}>
+          Reset
+        </button>
       </div>
 
       {currentMessageText && (
         <p className="session-last-reminder" aria-live="polite">
-          Last reminder: <em>{currentMessageText}</em>
+          <em>{currentMessageText}</em>
         </p>
       )}
 

@@ -25,7 +25,7 @@ export const ModeToggle: React.FC = () => {
             checked={mode === 'gentle'}
             onChange={() => handleChange('gentle')}
           />
-          Gentle reminders (can keep using phone)
+          Soft reminders — gentle nudges while you use your phone
         </label>
         <label className="mode-option">
           <input
@@ -35,7 +35,7 @@ export const ModeToggle: React.FC = () => {
             checked={mode === 'strict'}
             onChange={() => handleChange('strict')}
           />
-          Strict mode (full-screen prompt at end)
+          Focused block — full-screen moment at session end
         </label>
       </div>
     </fieldset>

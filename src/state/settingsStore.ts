@@ -10,7 +10,9 @@ function getDefaultSettings(): DetoxSettings {
     cultureCode: defaultPreset.cultureCode,
     languageCode: defaultPreset.languageCode,
     mode: 'gentle',
-    selectedMessageIds: defaultPreset.messages.map((m) => m.id),
+    selectedMessageId: null,
+    customMessage: '',
+    userName: '',
   };
 }
 
@@ -19,8 +21,25 @@ function loadSettings(): DetoxSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return getDefaultSettings();
-    const parsed = JSON.parse(raw) as DetoxSettings;
-    return { ...getDefaultSettings(), ...parsed };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const defaults = getDefaultSettings();
+    // Migrate legacy selectedMessageIds → selectedMessageId
+    let selectedMessageId = defaults.selectedMessageId;
+    if (typeof parsed.selectedMessageId === 'string' || parsed.selectedMessageId === null) {
+      selectedMessageId = parsed.selectedMessageId as string | null;
+    } else if (Array.isArray(parsed.selectedMessageIds) && parsed.selectedMessageIds.length > 0) {
+      selectedMessageId = parsed.selectedMessageIds[0] as string;
+    }
+    return {
+      ...defaults,
+      ...(typeof parsed.durationMinutes === 'number' ? { durationMinutes: parsed.durationMinutes } : {}),
+      ...(typeof parsed.cultureCode === 'string' ? { cultureCode: parsed.cultureCode } : {}),
+      ...(typeof parsed.languageCode === 'string' ? { languageCode: parsed.languageCode } : {}),
+      ...(parsed.mode === 'gentle' || parsed.mode === 'strict' ? { mode: parsed.mode } : {}),
+      ...(typeof parsed.customMessage === 'string' ? { customMessage: parsed.customMessage } : {}),
+      selectedMessageId,
+      ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
+    };
   } catch {
     return getDefaultSettings();
   }

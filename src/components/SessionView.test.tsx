@@ -9,7 +9,9 @@ vi.mock('../state/settingsStore', () => {
     cultureCode: 'pe_PE',
     languageCode: 'es-PE',
     mode: 'gentle',
-    selectedMessageIds: ['pe_oye_compadre'],
+    selectedMessageId: 'pe_oye_compadre',
+    customMessage: '',
+    userName: '',
   };
   return {
     settingsStore: {

@@ -9,7 +9,9 @@ let mockSettings: DetoxSettings = {
   cultureCode: 'pe_PE',
   languageCode: 'es-PE',
   mode: 'gentle',
-  selectedMessageIds: ['pe_oye_compadre', 'pe_haz_un_descanso'],
+  selectedMessageId: null,
+  customMessage: '',
+  userName: '',
 };
 
 vi.mock('../state/settingsStore', () => ({
@@ -45,7 +47,9 @@ describe('useDetoxSession', () => {
       cultureCode: 'pe_PE',
       languageCode: 'es-PE',
       mode: 'gentle',
-      selectedMessageIds: ['pe_oye_compadre', 'pe_haz_un_descanso'],
+      selectedMessageId: null,
+      customMessage: '',
+      userName: '',
     };
   });
 

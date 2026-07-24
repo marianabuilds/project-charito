@@ -27,28 +27,35 @@ export function useDetoxSession() {
     }
   }, []);
 
-  const pickRandomMessage = useCallback(() => {
+  const pickMessage = useCallback((): string | null => {
+    if (settings.selectedMessageId === 'custom') {
+      return settings.customMessage || null;
+    }
     const preset = culturalPresets.find(
       (p) => p.cultureCode === settings.cultureCode,
     );
     if (!preset) return null;
-    const pool = preset.messages.filter((m) =>
-      settings.selectedMessageIds.includes(m.id),
-    );
-    if (pool.length === 0) return null;
-    const index = Math.floor(Math.random() * pool.length);
-    return pool[index];
-  }, [settings.cultureCode, settings.selectedMessageIds]);
+
+    if (settings.selectedMessageId) {
+      const msg = preset.messages.find((m) => m.id === settings.selectedMessageId);
+      return msg?.text ?? null;
+    }
+
+    // Random from all messages in this culture
+    if (preset.messages.length === 0) return null;
+    const index = Math.floor(Math.random() * preset.messages.length);
+    return preset.messages[index].text;
+  }, [settings.cultureCode, settings.selectedMessageId, settings.customMessage]);
 
   const tick = useCallback(() => {
     setElapsedSeconds((prev) => {
       const next = prev + 1;
 
       if (next >= totalSeconds) {
-        const msg = pickRandomMessage();
-        if (msg) {
-          setCurrentMessageText(msg.text);
-          void speak(msg.text, settings.languageCode);
+        const text = pickMessage();
+        if (text) {
+          setCurrentMessageText(text);
+          void speak(text, settings.languageCode);
         }
         setStatus('completed');
         clearTimer();
@@ -57,10 +64,10 @@ export function useDetoxSession() {
 
       // Gentle mode: speak a reminder every 5 minutes.
       if (settings.mode === 'gentle' && next % (5 * 60) === 0) {
-        const msg = pickRandomMessage();
-        if (msg) {
-          setCurrentMessageText(msg.text);
-          void speak(msg.text, settings.languageCode);
+        const text = pickMessage();
+        if (text) {
+          setCurrentMessageText(text);
+          void speak(text, settings.languageCode);
         }
       }
 
@@ -70,7 +77,7 @@ export function useDetoxSession() {
     totalSeconds,
     settings.mode,
     settings.languageCode,
-    pickRandomMessage,
+    pickMessage,
     clearTimer,
   ]);
 

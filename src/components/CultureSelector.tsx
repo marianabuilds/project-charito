@@ -17,7 +17,7 @@ export const CultureSelector: React.FC = () => {
     settingsStore.set({
       cultureCode: preset.cultureCode,
       languageCode: preset.languageCode,
-      selectedMessageIds: preset.messages.map((m) => m.id),
+      selectedMessageId: null,
     });
   };
 
