@@ -11,7 +11,9 @@ let mockSettings: DetoxSettings = {
   mode: 'gentle',
   selectedMessageId: null,
   customMessage: '',
+  customMessageAudio: '',
   userName: '',
+  goals: [],
 };
 
 vi.mock('../state/settingsStore', () => ({
@@ -49,7 +51,9 @@ describe('useDetoxSession', () => {
       mode: 'gentle',
       selectedMessageId: null,
       customMessage: '',
+      customMessageAudio: '',
       userName: '',
+      goals: [],
     };
   });
 

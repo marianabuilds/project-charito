@@ -1,7 +1,15 @@
 import React from 'react';
 import { LeafIcon } from './LeafIcon';
+import { settingsStore } from '../state/settingsStore';
 
 const ONBOARDING_KEY = 'charito:onboarded:v1';
+
+const GOALS = [
+  { id: 'sleep', emoji: '😴', label: 'Sleep', subtext: 'Rest and recharge' },
+  { id: 'focus', emoji: '🧠', label: 'Focus', subtext: 'Deep work without distraction' },
+  { id: 'presence', emoji: '🫶', label: 'Presence', subtext: 'Be here with the people you love' },
+  { id: 'creativity', emoji: '🎨', label: 'Creativity', subtext: 'Space to think and create' },
+] as const;
 
 function hasOnboarded(): boolean {
   try {
@@ -19,11 +27,12 @@ function markOnboarded(): void {
   }
 }
 
-type OnboardingScreen = 1 | 2 | 3;
+type OnboardingScreen = 1 | 2 | 3 | 4;
 
 export const Onboarding: React.FC = () => {
   const [visible, setVisible] = React.useState(!hasOnboarded());
   const [screen, setScreen] = React.useState<OnboardingScreen>(1);
+  const [selectedGoals, setSelectedGoals] = React.useState<string[]>([]);
   const [notifStatus, setNotifStatus] = React.useState<'idle' | 'granted' | 'denied' | 'unsupported'>(() => {
     if (!('Notification' in window)) return 'unsupported';
     if (Notification.permission === 'granted') return 'granted';
@@ -35,20 +44,31 @@ export const Onboarding: React.FC = () => {
     setVisible(false);
   };
 
+  const toggleGoal = (id: string) => {
+    setSelectedGoals((prev) =>
+      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id],
+    );
+  };
+
+  const handleGoalsContinue = () => {
+    settingsStore.set({ goals: selectedGoals });
+    setScreen(3);
+  };
+
   const handleAllowNotifications = async () => {
     if (!('Notification' in window)) {
       setNotifStatus('unsupported');
-      setScreen(3);
+      setScreen(4);
       return;
     }
     if (Notification.permission === 'granted') {
       setNotifStatus('granted');
-      setScreen(3);
+      setScreen(4);
       return;
     }
     const result = await Notification.requestPermission();
     setNotifStatus(result === 'granted' ? 'granted' : 'denied');
-    setScreen(3);
+    setScreen(4);
   };
 
   if (!visible) return null;
@@ -76,8 +96,40 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* Screen 2 — Notifications permission */}
+        {/* Screen 2 — Goals */}
         {screen === 2 && (
+          <div className="onboarding-screen">
+            <h1 className="onboarding-heading">What do you want more of?</h1>
+            <p className="onboarding-subtext">
+              We'll personalize your reminders around what matters to you.
+            </p>
+            <div className="onboarding-goals-grid">
+              {GOALS.map((goal) => (
+                <button
+                  key={goal.id}
+                  type="button"
+                  className={`onboarding-goal-card${selectedGoals.includes(goal.id) ? ' onboarding-goal-card--selected' : ''}`}
+                  onClick={() => toggleGoal(goal.id)}
+                  aria-pressed={selectedGoals.includes(goal.id)}
+                >
+                  <span className="onboarding-goal-emoji" aria-hidden="true">{goal.emoji}</span>
+                  <span className="onboarding-goal-label">{goal.label}</span>
+                  <span className="onboarding-goal-subtext">{goal.subtext}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="button button-primary onboarding-btn"
+              onClick={handleGoalsContinue}
+            >
+              Continue →
+            </button>
+          </div>
+        )}
+
+        {/* Screen 3 — Notifications permission */}
+        {screen === 3 && (
           <div className="onboarding-screen">
             <h1 className="onboarding-heading">Stay reminded</h1>
             <p className="onboarding-subtext">
@@ -93,15 +145,15 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="onboarding-skip-link"
-              onClick={() => setScreen(3)}
+              onClick={() => setScreen(4)}
             >
               Skip for now
             </button>
           </div>
         )}
 
-        {/* Screen 3 — Done */}
-        {screen === 3 && (
+        {/* Screen 4 — Done */}
+        {screen === 4 && (
           <div className="onboarding-screen">
             <h1 className="onboarding-heading">You're all set.</h1>
             <p className="onboarding-subtext">
@@ -119,7 +171,7 @@ export const Onboarding: React.FC = () => {
 
         {/* Dot indicators */}
         <div className="onboarding-dots" aria-hidden="true">
-          {([1, 2, 3] as OnboardingScreen[]).map((s) => (
+          {([1, 2, 3, 4] as OnboardingScreen[]).map((s) => (
             <span
               key={s}
               className={`onboarding-dot${screen === s ? ' onboarding-dot--active' : ''}`}

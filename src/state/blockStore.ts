@@ -4,7 +4,8 @@ export type BlockingMethod =
   | 'duration'
   | 'set-hours'
   | 'usage-limit'
-  | 'launch-count';
+  | 'launch-count'
+  | 'location';
 
 export interface DetoxBlock {
   id: string;
@@ -28,6 +29,10 @@ export interface DetoxBlock {
   /** 0 | 5 | 10 | 15 */
   snoozeMinutes: number;
   active: boolean;
+  /** For "location" method: lat/lng of saved position */
+  location: { lat: number; lng: number } | null;
+  /** For "location" method: radius in meters (50 | 100 | 200 | 500) */
+  locationRadius: number;
 }
 
 export interface BlockState {
@@ -38,7 +43,7 @@ function validateBlock(raw: unknown): DetoxBlock | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== 'string') return null;
-  const validMethods: BlockingMethod[] = ['duration', 'set-hours', 'usage-limit', 'launch-count'];
+  const validMethods: BlockingMethod[] = ['duration', 'set-hours', 'usage-limit', 'launch-count', 'location'];
   return {
     id: r.id,
     label: typeof r.label === 'string' ? r.label : '',
@@ -68,6 +73,12 @@ function validateBlock(raw: unknown): DetoxBlock | null {
     customMessage: typeof r.customMessage === 'string' ? r.customMessage : '',
     snoozeMinutes: typeof r.snoozeMinutes === 'number' ? r.snoozeMinutes : 0,
     active: typeof r.active === 'boolean' ? r.active : true,
+    location:
+      r.location && typeof (r.location as Record<string, unknown>).lat === 'number' &&
+      typeof (r.location as Record<string, unknown>).lng === 'number'
+        ? { lat: (r.location as Record<string, unknown>).lat as number, lng: (r.location as Record<string, unknown>).lng as number }
+        : null,
+    locationRadius: typeof r.locationRadius === 'number' ? r.locationRadius : 100,
   };
 }
 

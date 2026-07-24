@@ -12,7 +12,9 @@ function getDefaultSettings(): DetoxSettings {
     mode: 'gentle',
     selectedMessageId: null,
     customMessage: '',
+    customMessageAudio: '',
     userName: '',
+    goals: [],
   };
 }
 
@@ -37,8 +39,10 @@ function loadSettings(): DetoxSettings {
       ...(typeof parsed.languageCode === 'string' ? { languageCode: parsed.languageCode } : {}),
       ...(parsed.mode === 'gentle' || parsed.mode === 'strict' ? { mode: parsed.mode } : {}),
       ...(typeof parsed.customMessage === 'string' ? { customMessage: parsed.customMessage } : {}),
+      ...(typeof parsed.customMessageAudio === 'string' ? { customMessageAudio: parsed.customMessageAudio } : {}),
       selectedMessageId,
       ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
+      ...(Array.isArray(parsed.goals) ? { goals: parsed.goals as string[] } : {}),
     };
   } catch {
     return getDefaultSettings();

@@ -3,6 +3,8 @@ import { blockStore } from '../state/blockStore';
 import type { DetoxBlock, BlockingMethod } from '../state/blockStore';
 import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
+import { speak } from '../services/audioEngine';
+import { useAudioRecorder } from '../hooks/useAudioRecorder';
 
 // Single-letter day labels: S M T W T F S
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -13,7 +15,10 @@ const BLOCKING_METHODS: { id: BlockingMethod; title: string; description: string
   { id: 'set-hours', title: 'Set hours', description: 'Block during a time window' },
   { id: 'usage-limit', title: 'Usage limit', description: 'Cap daily screen time' },
   { id: 'launch-count', title: 'Launch count', description: 'Limit how many times you open apps' },
+  { id: 'location', title: 'Location', description: 'Remind me when I\'m at a specific spot' },
 ];
+
+const LOCATION_RADII = [50, 100, 200, 500] as const;
 
 function formatDuration(minutes: number): string {
   if (minutes <= 60) return `${minutes} min`;
@@ -34,6 +39,8 @@ function blockSummary(block: DetoxBlock): string {
       return `${block.usageLimitMinutes} min/day`;
     case 'launch-count':
       return `${block.launchCountMax} opens/day`;
+    case 'location':
+      return block.location ? `📍 ±${block.locationRadius}m` : 'Location';
     default:
       return '';
   }
@@ -42,6 +49,33 @@ function blockSummary(block: DetoxBlock): string {
 function methodLabel(method: BlockingMethod): string {
   const m = BLOCKING_METHODS.find((b) => b.id === method);
   return m?.title ?? method;
+}
+
+/** Auto-generated description when the user hasn't supplied a label */
+function blockAutoDescription(block: DetoxBlock): string {
+  const method = methodLabel(block.blockingMethod);
+  let value = '';
+  switch (block.blockingMethod) {
+    case 'duration':
+      value = formatDuration(block.durationMinutes);
+      break;
+    case 'set-hours':
+      value =
+        block.setHoursStart && block.setHoursEnd
+          ? `${block.setHoursStart}–${block.setHoursEnd}`
+          : 'Set hours';
+      break;
+    case 'usage-limit':
+      value = `${block.usageLimitMinutes} min/day`;
+      break;
+    case 'launch-count':
+      value = `${block.launchCountMax} opens/day`;
+      break;
+    case 'location':
+      value = block.location ? `±${block.locationRadius}m` : 'no location';
+      break;
+  }
+  return `${method} · ${value}`;
 }
 
 interface FormState {
@@ -56,6 +90,10 @@ interface FormState {
   messageId: string;
   customMessage: string;
   snoozeMinutes: number;
+  location: { lat: number; lng: number } | null;
+  locationRadius: number;
+  locationLoading: boolean;
+  locationError: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -70,12 +108,42 @@ const EMPTY_FORM: FormState = {
   messageId: '',
   customMessage: '',
   snoozeMinutes: 0,
+  location: null,
+  locationRadius: 100,
+  locationLoading: false,
+  locationError: '',
 };
 
 export const BlockCard: React.FC = () => {
   const [blocks, setBlocks] = React.useState<DetoxBlock[]>(blockStore.get().blocks);
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+  const [formCustomAudio, setFormCustomAudio] = React.useState<string>(
+    () => settingsStore.get().customMessageAudio,
+  );
+
+  const {
+    isRecording: isRecordingMsg,
+    isSupported: hasMic,
+    startRecording,
+    stopRecording,
+    discardRecording,
+  } = useAudioRecorder((dataUrl) => {
+    setFormCustomAudio(dataUrl);
+    settingsStore.set({ customMessageAudio: dataUrl });
+  });
+
+  // Preview a message via TTS
+  const [previewingSpeech, setPreviewingSpeech] = React.useState(false);
+  const previewMessage = (text: string) => {
+    const settings = settingsStore.get();
+    setPreviewingSpeech(true);
+    void speak(text, settings.languageCode).then(() => setPreviewingSpeech(false));
+  };
+  const stopPreview = () => {
+    window.speechSynthesis.cancel();
+    setPreviewingSpeech(false);
+  };
 
   React.useEffect(() => {
     return blockStore.subscribe((next) => setBlocks(next.blocks));
@@ -94,6 +162,32 @@ export const BlockCard: React.FC = () => {
     setShowForm(false);
   };
 
+  const handleCaptureLocation = () => {
+    if (!('geolocation' in navigator)) {
+      setForm((f) => ({ ...f, locationError: 'Geolocation not supported.' }));
+      return;
+    }
+    setForm((f) => ({ ...f, locationLoading: true, locationError: '' }));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((f) => ({
+          ...f,
+          location: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          locationLoading: false,
+          locationError: '',
+        }));
+      },
+      () => {
+        setForm((f) => ({
+          ...f,
+          locationLoading: false,
+          locationError: 'Location permission denied.',
+        }));
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+    );
+  };
+
   const handleSave = () => {
     const block: DetoxBlock = {
       id: crypto.randomUUID(),
@@ -109,6 +203,8 @@ export const BlockCard: React.FC = () => {
       customMessage: form.customMessage,
       snoozeMinutes: form.snoozeMinutes,
       active: true,
+      location: form.location,
+      locationRadius: form.locationRadius,
     };
     const current = blockStore.get();
     blockStore.set({ blocks: [...current.blocks, block] });
@@ -141,10 +237,11 @@ export const BlockCard: React.FC = () => {
     }));
   };
 
-  // Validate save: set-hours requires both times
+  // Validate save: set-hours requires both times; location requires a saved location
   const canSave =
-    form.blockingMethod !== 'set-hours' ||
-    (form.setHoursStart.length > 0 && form.setHoursEnd.length > 0);
+    (form.blockingMethod !== 'set-hours' ||
+      (form.setHoursStart.length > 0 && form.setHoursEnd.length > 0)) &&
+    (form.blockingMethod !== 'location' || form.location !== null);
 
   return (
     <div className="block-card">
@@ -168,7 +265,7 @@ export const BlockCard: React.FC = () => {
               id="block-label"
               type="text"
               className="block-text-input"
-              placeholder="Block name"
+              placeholder="Block name (optional)"
               value={form.label}
               onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
             />
@@ -324,6 +421,47 @@ export const BlockCard: React.FC = () => {
                           </div>
                         </>
                       )}
+
+                      {m.id === 'location' && (
+                        <>
+                          <p className="block-form-label-sm">
+                            Location block — your phone will remind you when you're at this spot
+                          </p>
+                          {form.location ? (
+                            <p className="block-form-hint" style={{ color: 'var(--accent)' }}>
+                              📍 Location saved (±{form.locationRadius}m)
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button button-ghost"
+                              style={{ alignSelf: 'flex-start', fontSize: '0.8rem' }}
+                              onClick={handleCaptureLocation}
+                              disabled={form.locationLoading}
+                            >
+                              {form.locationLoading ? 'Getting location…' : 'Use my current location'}
+                            </button>
+                          )}
+                          {form.locationError && (
+                            <p style={{ color: '#e53e3e', fontSize: '0.75rem', margin: 0 }}>
+                              {form.locationError}
+                            </p>
+                          )}
+                          <p className="block-form-label-sm" style={{ marginTop: '0.5rem' }}>Radius</p>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {LOCATION_RADII.map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                className={`block-day-pill${form.locationRadius === r ? ' block-day-pill--active' : ''}`}
+                                onClick={() => setForm((f) => ({ ...f, locationRadius: r }))}
+                              >
+                                {r}m
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </React.Fragment>
@@ -336,20 +474,44 @@ export const BlockCard: React.FC = () => {
             <label className="block-form-label" htmlFor="block-message">
               Message
             </label>
-            <select
-              id="block-message"
-              className="select"
-              value={form.messageId}
-              onChange={(e) => setForm((f) => ({ ...f, messageId: e.target.value }))}
-            >
-              <option value="">Random</option>
-              {preset?.messages.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.text.length > 55 ? m.text.slice(0, 52) + '…' : m.text}
-                </option>
-              ))}
-              <option value="custom">Custom…</option>
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select
+                id="block-message"
+                className="select"
+                value={form.messageId}
+                onChange={(e) => setForm((f) => ({ ...f, messageId: e.target.value }))}
+                style={{ flex: 1 }}
+              >
+                <option value="">Random</option>
+                {preset?.messages.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.text.length > 55 ? m.text.slice(0, 52) + '…' : m.text}
+                  </option>
+                ))}
+                <option value="custom">Custom…</option>
+              </select>
+              {/* TTS preview button for the selected non-custom message */}
+              {form.messageId && form.messageId !== 'custom' && (
+                <button
+                  type="button"
+                  onClick={previewingSpeech ? stopPreview : () => {
+                    const msg = preset?.messages.find((m) => m.id === form.messageId);
+                    if (msg) previewMessage(msg.text);
+                  }}
+                  aria-label={previewingSpeech ? 'Stop preview' : 'Preview message'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-m, #888)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {previewingSpeech ? '■' : '▶'}
+                </button>
+              )}
+            </div>
           </div>
 
           {form.messageId === 'custom' && (
@@ -365,6 +527,77 @@ export const BlockCard: React.FC = () => {
                 value={form.customMessage}
                 onChange={(e) => setForm((f) => ({ ...f, customMessage: e.target.value }))}
               />
+              {/* Mic recording */}
+              {hasMic && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginTop: '0.5rem',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={isRecordingMsg ? stopRecording : () => void startRecording()}
+                    aria-label={isRecordingMsg ? 'Stop recording' : 'Record audio message'}
+                    style={{
+                      background: isRecordingMsg ? '#e53e3e' : 'none',
+                      color: isRecordingMsg ? '#fff' : 'inherit',
+                      border: '1px solid currentColor',
+                      borderRadius: '50%',
+                      width: 28,
+                      height: 28,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.85rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    🎤
+                  </button>
+                  {isRecordingMsg && (
+                    <span style={{ fontSize: '0.75rem', color: '#e53e3e' }}>Recording…</span>
+                  )}
+                </div>
+              )}
+              {/* Recorded audio playback + discard */}
+              {formCustomAudio && !isRecordingMsg && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginTop: '0.5rem',
+                  }}
+                >
+                  <audio
+                    src={formCustomAudio}
+                    controls
+                    style={{ height: 28, flex: 1, minWidth: 0 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      discardRecording();
+                      setFormCustomAudio('');
+                      settingsStore.set({ customMessageAudio: '' });
+                    }}
+                    aria-label="Discard recording"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -412,7 +645,18 @@ export const BlockCard: React.FC = () => {
             >
               <div className="block-row-left">
                 <span className="block-row-time">{blockSummary(block)}</span>
-                {block.label && <span className="block-row-label">{block.label}</span>}
+                {block.label ? (
+                  <span className="block-row-label" style={{ fontWeight: 600 }}>
+                    {block.label}
+                  </span>
+                ) : (
+                  <span
+                    className="block-row-label"
+                    style={{ color: 'var(--text-m)', fontWeight: 400 }}
+                  >
+                    {blockAutoDescription(block)}
+                  </span>
+                )}
                 <div className="block-row-meta">
                   {block.days.length === 0 ? (
                     <span className="block-day-tag block-day-tag--once">Once</span>

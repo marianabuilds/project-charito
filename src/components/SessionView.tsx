@@ -3,6 +3,18 @@ import { useSession } from '../state/SessionContext';
 import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { StrictOverlay } from './StrictOverlay';
+import { AudioMessageRow } from './AudioMessageRow';
+import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { journalStore } from '../state/journalStore';
+
+const JOURNAL_TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'] as const;
+
+const AMBIENT_SOUNDS = [
+  { id: 'off', label: 'Off', url: '' },
+  { id: 'rain', label: 'Rain', url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_270f7d3f76.mp3' },
+  { id: 'forest', label: 'Forest', url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_dc39bde8e6.mp3' },
+  { id: 'lofi', label: 'Lo-fi', url: 'https://cdn.pixabay.com/download/audio/2023/01/27/audio_8b378b3728.mp3' },
+] as const;
 
 type QuickBlockingMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
 type QuickStep = 'method' | 'config' | 'message' | 'confirm';
@@ -41,6 +53,9 @@ export const SessionView: React.FC = () => {
   } = useSession();
 
   const [overlayVisible, setOverlayVisible] = React.useState(false);
+  const [journalLogged, setJournalLogged] = React.useState(false);
+  const [ambientSound, setAmbientSound] = React.useState<'off' | 'rain' | 'forest' | 'lofi'>('off');
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   // 4-step quick flow state
   const [quickStep, setQuickStep] = React.useState<QuickStep>('method');
@@ -52,6 +67,18 @@ export const SessionView: React.FC = () => {
   const [quickLaunchCount, setQuickLaunchCount] = React.useState(10);
   const [quickMessageId, setQuickMessageId] = React.useState('');
   const [quickCustomMessage, setQuickCustomMessage] = React.useState('');
+  const [quickCustomAudio, setQuickCustomAudio] = React.useState(() => settingsStore.get().customMessageAudio);
+
+  const {
+    isRecording: isRecordingMsg,
+    isSupported: hasMic,
+    startRecording,
+    stopRecording,
+    discardRecording,
+  } = useAudioRecorder((dataUrl) => {
+    setQuickCustomAudio(dataUrl);
+    settingsStore.set({ customMessageAudio: dataUrl });
+  });
 
   React.useEffect(() => {
     if (status === 'completed' && isStrict) {
@@ -59,8 +86,59 @@ export const SessionView: React.FC = () => {
     }
   }, [status, isStrict]);
 
+  // Reset journal log flag when session resets to idle
+  React.useEffect(() => {
+    if (status === 'idle') {
+      setJournalLogged(false);
+      setAmbientSound('off');
+    }
+  }, [status]);
+
+  // Manage ambient audio element
+  React.useEffect(() => {
+    const sound = AMBIENT_SOUNDS.find((s) => s.id === ambientSound);
+    if (!sound || sound.url === '') {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      return;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    const audio = new Audio(sound.url);
+    audio.loop = true;
+    audioRef.current = audio;
+    void audio.play().catch(() => { /* autoplay blocked — ignore */ });
+    return () => {
+      audio.pause();
+    };
+  }, [ambientSound]);
+
+  // Clean up audio on unmount
+  React.useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   const handleDismissOverlay = () => {
     setOverlayVisible(false);
+    reset();
+  };
+
+  const handleJournalEntry = (trigger: string) => {
+    const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    journalStore.add({
+      date: new Date().toISOString().slice(0, 10),
+      trigger,
+      minutesReclaimed: elapsedMinutes,
+    });
+    setJournalLogged(true);
     reset();
   };
 
@@ -263,17 +341,16 @@ export const SessionView: React.FC = () => {
               </label>
               {/* Cultural messages */}
               {preset?.messages.map((m) => (
-                <label key={m.id} className="quick-message-row">
-                  <input
-                    type="radio"
-                    name="quick-message"
-                    value={m.id}
-                    checked={quickMessageId === m.id}
-                    onChange={() => setQuickMessageId(m.id)}
-                    className="quick-message-radio"
-                  />
-                  <span className="quick-message-text">{m.text}</span>
-                </label>
+                <AudioMessageRow
+                  key={m.id}
+                  text={m.text}
+                  name="quick-message"
+                  value={m.id}
+                  checked={quickMessageId === m.id}
+                  onChange={() => setQuickMessageId(m.id)}
+                  className="quick-message-row"
+                  textClassName="quick-message-text"
+                />
               ))}
               {/* Custom */}
               <label className="quick-message-row">
@@ -288,13 +365,88 @@ export const SessionView: React.FC = () => {
                 <span className="quick-message-text">Custom…</span>
               </label>
               {quickMessageId === 'custom' && (
-                <input
-                  type="text"
-                  className="block-text-input quick-custom-msg-input"
-                  placeholder="Type your reminder…"
-                  value={quickCustomMessage}
-                  onChange={(e) => setQuickCustomMessage(e.target.value)}
-                />
+                <div style={{ marginTop: '0.25rem' }}>
+                  <input
+                    type="text"
+                    className="block-text-input quick-custom-msg-input"
+                    placeholder="Type your reminder…"
+                    value={quickCustomMessage}
+                    onChange={(e) => setQuickCustomMessage(e.target.value)}
+                  />
+
+                  {/* Mic recording — hidden when MediaRecorder not available */}
+                  {hasMic && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginTop: '0.5rem',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={isRecordingMsg ? stopRecording : () => void startRecording()}
+                        aria-label={isRecordingMsg ? 'Stop recording' : 'Record audio message'}
+                        style={{
+                          background: isRecordingMsg ? '#e53e3e' : 'none',
+                          color: isRecordingMsg ? '#fff' : 'inherit',
+                          border: '1px solid currentColor',
+                          borderRadius: '50%',
+                          width: 28,
+                          height: 28,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.85rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        🎤
+                      </button>
+                      {isRecordingMsg && (
+                        <span style={{ fontSize: '0.75rem', color: '#e53e3e' }}>Recording…</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Recorded audio playback + discard */}
+                  {quickCustomAudio && !isRecordingMsg && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginTop: '0.5rem',
+                      }}
+                    >
+                      <audio
+                        src={quickCustomAudio}
+                        controls
+                        style={{ height: 28, flex: 1, minWidth: 0 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          discardRecording();
+                          setQuickCustomAudio('');
+                          settingsStore.set({ customMessageAudio: '' });
+                        }}
+                        aria-label="Discard recording"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <button
@@ -385,9 +537,38 @@ export const SessionView: React.FC = () => {
             <em>"{currentMessageText}"</em>
           </p>
         )}
-        <button type="button" className="button button-primary" onClick={reset}>
-          Start another
-        </button>
+
+        {/* Journal prompt */}
+        {!journalLogged && (
+          <div className="journal-prompt">
+            <p className="journal-prompt-label">What made you reach for your phone?</p>
+            <div className="journal-trigger-grid">
+              {JOURNAL_TRIGGERS.map((trigger) => (
+                <button
+                  key={trigger}
+                  type="button"
+                  className="journal-trigger-btn"
+                  onClick={() => handleJournalEntry(trigger)}
+                >
+                  {trigger}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="journal-skip-link"
+              onClick={reset}
+            >
+              Skip
+            </button>
+          </div>
+        )}
+
+        {journalLogged && (
+          <button type="button" className="button button-primary" onClick={reset}>
+            Start another
+          </button>
+        )}
       </div>
     );
   }
@@ -436,6 +617,25 @@ export const SessionView: React.FC = () => {
           Reset
         </button>
       </div>
+
+      {/* Ambient sound row — shown when running */}
+      {status === 'running' && (
+        <div className="ambient-sound-row">
+          <p className="ambient-sound-label">Ambient sound</p>
+          <div className="ambient-sound-pills">
+            {AMBIENT_SOUNDS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`ambient-pill${ambientSound === s.id ? ' ambient-pill--active' : ''}`}
+                onClick={() => setAmbientSound(s.id as typeof ambientSound)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {currentMessageText && (
         <p className="session-last-reminder" aria-live="polite">

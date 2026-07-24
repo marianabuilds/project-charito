@@ -24,11 +24,6 @@ export const HomeView: React.FC = () => {
 
   const [msgIndex, setMsgIndex] = React.useState(0);
   const [msgVisible, setMsgVisible] = React.useState(true);
-  const [userName, setUserName] = React.useState(settingsStore.get().userName);
-
-  React.useEffect(() => {
-    return settingsStore.subscribe((s) => setUserName(s.userName));
-  }, []);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -71,8 +66,6 @@ export const HomeView: React.FC = () => {
 
   useDetoxBlocks(handleBlockTrigger);
 
-  const trimmedName = userName.trim();
-
   return (
     <div className="view">
       <header className="app-header">
@@ -86,11 +79,6 @@ export const HomeView: React.FC = () => {
             {ROTATING_MESSAGES[msgIndex]}
           </p>
         </div>
-
-        {/* User name as large heading — only shown if set */}
-        {trimmedName && (
-          <h1 className="app-title home-username-heading">"{trimmedName}"</h1>
-        )}
       </header>
 
       <section aria-label="This week" className="card">

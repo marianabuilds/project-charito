@@ -1,4 +1,6 @@
 import React from 'react';
+import { screenTimeStore } from '../state/screenTimeStore';
+import { journalStore } from '../state/journalStore';
 
 interface WhyItem {
   title: string;
@@ -43,10 +45,83 @@ const HOW_TIPS: string[] = [
   'Turn off all non-essential notifications — only allow calls and messages.',
 ];
 
+const SCREEN_TIME_QUICK_VALUES = [30, 60, 90, 120, 180, 240] as const;
+
+function formatMinutes(minutes: number): string {
+  if (minutes === 0) return '0 min';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+function formatWeekMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+const TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'];
+
 export const InsightsView: React.FC = () => {
   const [openIndex, setOpenIndex] = React.useState<number | null>(null);
+  const [screenTimeData, setScreenTimeData] = React.useState(() => screenTimeStore.get());
+  const [journalEntries, setJournalEntries] = React.useState(() => journalStore.get());
+  const [stepperValue, setStepperValue] = React.useState<number>(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return screenTimeStore.get()[today] ?? 0;
+  });
+
+  React.useEffect(() => {
+    return screenTimeStore.subscribe((data) => {
+      setScreenTimeData(data);
+      const today = new Date().toISOString().slice(0, 10);
+      setStepperValue(data[today] ?? 0);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return journalStore.subscribe((entries) => {
+      setJournalEntries(entries);
+    });
+  }, []);
 
   const toggle = (i: number) => setOpenIndex((prev) => (prev === i ? null : i));
+
+  const handleStepperChange = (delta: number) => {
+    const next = Math.max(0, Math.min(480, stepperValue + delta));
+    setStepperValue(next);
+    screenTimeStore.setToday(next);
+  };
+
+  const handleQuickSet = (minutes: number) => {
+    setStepperValue(minutes);
+    screenTimeStore.setToday(minutes);
+  };
+
+  // 7-day bar chart data
+  const last7 = screenTimeStore.getLast7Days();
+  const maxMinutes = Math.max(...last7.map((d) => d.minutes), 1);
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  // Weekly digest data
+  const weekEntries = journalStore.getThisWeek();
+  const blocksCompleted = weekEntries.length;
+  const minutesReclaimed = weekEntries.reduce((acc, e) => acc + e.minutesReclaimed, 0);
+  const triggerTally = journalStore.getWeeklyTriggerTally();
+  const topTrigger = Object.entries(triggerTally).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  // Trigger patterns this week
+  const hasTriggerData = weekEntries.length > 0;
+
+  // Monday banner
+  const isMonday = new Date().getDay() === 1;
+
+  // Void to suppress unused var lint
+  void journalEntries;
+  void screenTimeData;
 
   return (
     <div className="view">
@@ -57,6 +132,116 @@ export const InsightsView: React.FC = () => {
           Science-backed reasons to disconnect and practical ways to do it.
         </p>
       </header>
+
+      {/* ── Screen time self-report ──────────────────────────────────────── */}
+      <section aria-label="Today's screen time" style={{ marginBottom: '1.5rem' }}>
+        <p className="insights-screen-time-label">HOW LONG WAS I ON MY PHONE TODAY?</p>
+
+        {/* Stepper */}
+        <div className="insights-stepper-row">
+          <button
+            type="button"
+            className="insights-stepper-btn"
+            onClick={() => handleStepperChange(-30)}
+            aria-label="Decrease by 30 minutes"
+            disabled={stepperValue === 0}
+          >
+            −
+          </button>
+          <span className="insights-stepper-value">{formatMinutes(stepperValue)}</span>
+          <button
+            type="button"
+            className="insights-stepper-btn"
+            onClick={() => handleStepperChange(30)}
+            aria-label="Increase by 30 minutes"
+            disabled={stepperValue >= 480}
+          >
+            +
+          </button>
+        </div>
+
+        {/* Quick-tap buttons */}
+        <div className="insights-quick-btns">
+          {SCREEN_TIME_QUICK_VALUES.map((v) => (
+            <button
+              key={v}
+              type="button"
+              className={`insights-quick-btn${stepperValue === v ? ' insights-quick-btn--active' : ''}`}
+              onClick={() => handleQuickSet(v)}
+            >
+              {v === 240 ? '4h+' : formatMinutes(v).replace(' ', '')}
+            </button>
+          ))}
+        </div>
+
+        {/* 7-day bar chart */}
+        <div className="insights-bar-chart" aria-label="Last 7 days screen time">
+          {last7.map(({ date, minutes }) => {
+            const isToday = date === todayISO;
+            const heightPct = minutes === 0 ? 4 : Math.max(8, (minutes / maxMinutes) * 100);
+            const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' }).slice(0, 1);
+            return (
+              <div key={date} className="insights-bar-col">
+                <div className="insights-bar-track">
+                  <div
+                    className={`insights-bar${isToday ? ' insights-bar--today' : ''}${minutes === 0 ? ' insights-bar--empty' : ''}`}
+                    style={{ height: `${heightPct}%` }}
+                    title={`${dayLabel}: ${formatMinutes(minutes)}`}
+                  />
+                </div>
+                <span className="insights-bar-label">{dayLabel}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Trigger patterns ──────────────────────────────────────────────── */}
+      <section aria-label="Trigger patterns" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">Trigger patterns</h2>
+        {hasTriggerData ? (
+          <div className="insights-trigger-list">
+            {TRIGGERS.map((trigger) => (
+              <div key={trigger} className="insights-trigger-row">
+                <span className="insights-trigger-name">{trigger}</span>
+                <span className="insights-trigger-count">{triggerTally[trigger] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="insights-coming-soon-body" style={{ margin: 0 }}>
+            Complete your first detox block to see patterns.
+          </p>
+        )}
+      </section>
+
+      {/* ── Weekly digest ──────────────────────────────────────────────────── */}
+      <section aria-label="This week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">This week</h2>
+
+        {isMonday && (
+          <p className="insights-monday-banner">New week, fresh start. 🌱</p>
+        )}
+
+        <div className="insights-digest-grid">
+          <div className="insights-digest-tile">
+            <span className="insights-digest-number">{blocksCompleted}</span>
+            <span className="insights-digest-label">Blocks completed</span>
+          </div>
+          <div className="insights-digest-tile">
+            <span className="insights-digest-number">{formatWeekMinutes(minutesReclaimed)}</span>
+            <span className="insights-digest-label">Minutes reclaimed</span>
+          </div>
+          <div className="insights-digest-tile">
+            <span className="insights-digest-number">{topTrigger ?? '—'}</span>
+            <span className="insights-digest-label">Top trigger</span>
+          </div>
+          <div className="insights-digest-tile">
+            <span className="insights-digest-number" style={{ fontSize: '0.875rem' }}>Coming soon</span>
+            <span className="insights-digest-label">Most used message</span>
+          </div>
+        </div>
+      </section>
 
       {/* Section 1 — Why disconnect */}
       <section aria-label="Why disconnect">

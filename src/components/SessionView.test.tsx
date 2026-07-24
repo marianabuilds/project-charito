@@ -11,7 +11,9 @@ vi.mock('../state/settingsStore', () => {
     mode: 'gentle',
     selectedMessageId: 'pe_oye_compadre',
     customMessage: '',
+    customMessageAudio: '',
     userName: '',
+    goals: [],
   };
   return {
     settingsStore: {

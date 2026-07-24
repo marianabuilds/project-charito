@@ -14,6 +14,18 @@ function todayKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+/** Haversine distance between two lat/lng points in meters */
+export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface UseDetoxBlocksResult {
   blocks: DetoxBlock[];
   snooze: (blockId: string) => void;
@@ -58,8 +70,8 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
           continue;
         }
 
-        // Only "set-hours" blocks are auto-triggered by time window
-        if (block.blockingMethod !== 'set-hours') {
+        // Only "set-hours" and "location" blocks are auto-triggered
+        if (block.blockingMethod !== 'set-hours' && block.blockingMethod !== 'location') {
           remaining.push(block);
           continue;
         }
@@ -67,20 +79,24 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
         const firedKey = `${block.id}:${today}`;
         const matchesDay =
           block.days.length === 0 ? true : block.days.includes(dayOfWeek);
-        const inWindow =
-          block.setHoursStart.length > 0 &&
-          block.setHoursEnd.length > 0 &&
-          block.setHoursStart <= hhmm &&
-          hhmm <= block.setHoursEnd;
 
-        if (matchesDay && inWindow && !firedRef.current.has(firedKey)) {
-          firedRef.current.add(firedKey);
-          onTriggerRef.current(block);
-          if (block.days.length === 0) {
-            changed = true;
-            continue;
+        if (block.blockingMethod === 'set-hours') {
+          const inWindow =
+            block.setHoursStart.length > 0 &&
+            block.setHoursEnd.length > 0 &&
+            block.setHoursStart <= hhmm &&
+            hhmm <= block.setHoursEnd;
+
+          if (matchesDay && inWindow && !firedRef.current.has(firedKey)) {
+            firedRef.current.add(firedKey);
+            onTriggerRef.current(block);
+            if (block.days.length === 0) {
+              changed = true;
+              continue;
+            }
           }
         }
+        // Location blocks are checked asynchronously — skip synchronous firing here
         remaining.push(block);
       }
 
@@ -91,7 +107,47 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
 
     check();
     const id = window.setInterval(check, 30_000);
-    return () => window.clearInterval(id);
+
+    // Location block polling: check position every 30s separately
+    let locationIntervalId: number | null = null;
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      const checkLocation = () => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const today = todayKey();
+            const state = blockStore.get();
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            for (const block of state.blocks) {
+              if (!block.active || block.blockingMethod !== 'location') continue;
+              if (!block.location) continue;
+              const firedKey = `${block.id}:${today}`;
+              if (firedRef.current.has(firedKey)) continue;
+              const matchesDay = block.days.length === 0 ? true : block.days.includes(dayOfWeek);
+              if (!matchesDay) continue;
+              const dist = haversineMeters(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                block.location.lat,
+                block.location.lng,
+              );
+              if (dist <= block.locationRadius) {
+                firedRef.current.add(firedKey);
+                onTriggerRef.current(block);
+              }
+            }
+          },
+          () => { /* permission denied or error — silently ignore */ },
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 20000 },
+        );
+      };
+      locationIntervalId = window.setInterval(checkLocation, 30_000);
+    }
+
+    return () => {
+      window.clearInterval(id);
+      if (locationIntervalId !== null) window.clearInterval(locationIntervalId);
+    };
   }, []);
 
   const snooze = useCallback((blockId: string) => {
@@ -117,6 +173,8 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
       customMessage: block.customMessage,
       snoozeMinutes: 0,
       active: true,
+      location: null,
+      locationRadius: 100,
     };
     blockStore.set({ blocks: [...state.blocks, snoozedBlock] });
   }, []);

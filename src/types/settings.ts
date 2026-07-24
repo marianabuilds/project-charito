@@ -8,8 +8,12 @@ export interface DetoxSettings {
   /** ID of the selected message, null = random, 'custom' = use customMessage */
   selectedMessageId: string | null;
   customMessage: string;
+  /** Base64 data URL of a recorded audio message; empty string = none */
+  customMessageAudio: string;
   /** User's display name; empty string = not set */
   userName: string;
+  /** Goals selected during onboarding, e.g. ['sleep', 'focus'] */
+  goals: string[];
 }
 
 export interface CulturalMessage {
