@@ -32,7 +32,7 @@ const TOP_HIGH_DATA = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X'];
 const DURATION_PILLS = [15, 30, 45, 60, 90, 120] as const;
 
 // ── Quick block method types ─────────────────────────────────────────────────
-type QuickMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
+type QuickMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count' | null;
 
 const QUICK_METHODS: {
   id: QuickMethod;
@@ -78,7 +78,7 @@ export const SessionView: React.FC = () => {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   // ── Single-screen quick block state ─────────────────────────────────────
-  const [quickMethod, setQuickMethod] = React.useState<QuickMethod>('duration');
+  const [quickMethod, setQuickMethod] = React.useState<QuickMethod>(null);
   const [quickDuration, setQuickDuration] = React.useState(30);
   const [quickFromTime, setQuickFromTime] = React.useState('09:00');
   const [quickUntilTime, setQuickUntilTime] = React.useState('17:00');
@@ -163,12 +163,9 @@ export const SessionView: React.FC = () => {
   };
 
   const handleStartNow = () => {
+    if (quickMethod === null) return;
     settingsStore.set({ durationMinutes: quickDuration });
-    if (quickMessageId) {
-      settingsStore.set({ selectedMessageId: quickMessageId });
-    } else {
-      settingsStore.set({ selectedMessageId: null });
-    }
+    settingsStore.set({ selectedMessageId: quickMessageId || null });
     start();
     toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
@@ -180,218 +177,232 @@ export const SessionView: React.FC = () => {
 
   // ── Idle state: single-screen block builder ─────────────────────────────
   if (status === 'idle') {
-    const selectedMethodMeta = QUICK_METHODS.find((m) => m.id === quickMethod)!;
-
     return (
       <div className="quick-session-card">
         <p className="quick-section-label">Quick offline block</p>
 
-        {/* 2×2 method card grid */}
+        {/* 2×2 method card grid — config expands inside the selected card */}
         <div className="quick-method-grid">
-          {QUICK_METHODS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={`quick-method-card${quickMethod === m.id ? ' quick-method-card--active' : ''}`}
-              onClick={() => setQuickMethod(m.id)}
-              aria-pressed={quickMethod === m.id}
-            >
-              <span className="quick-method-card-title">{m.title}</span>
-              <span className="quick-method-card-desc">{m.description}</span>
-              <span className="quick-method-card-example">{m.example}</span>
-            </button>
-          ))}
-        </div>
+          {QUICK_METHODS.map((m) => {
+            const isActive = quickMethod === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className={`quick-method-card${isActive ? ' quick-method-card--active' : ''}`}
+                onClick={() => setQuickMethod(isActive ? null : m.id)}
+                aria-pressed={isActive}
+              >
+                {/* Card header — always visible */}
+                <span className="quick-method-card-title">{m.title}</span>
+                <span className="quick-method-card-desc">{m.description}</span>
+                {!isActive && (
+                  <span className="quick-method-card-example">{m.example}</span>
+                )}
 
-        {/* Method-specific input — inline below grid */}
-        <div className="quick-method-config">
-          {quickMethod === 'duration' && (
-            <>
-              <p className="quick-duration-big">{formatDuration(quickDuration)}</p>
-              <input
-                type="range"
-                className="quick-range"
-                min={5} max={120} step={5}
-                value={quickDuration}
-                onChange={(e) => setQuickDuration(Number(e.target.value))}
-                aria-label="Session duration"
-                aria-valuetext={formatDuration(quickDuration)}
-              />
-              <div className="quick-duration-pills">
-                {DURATION_PILLS.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={`quick-duration-pill${quickDuration === d ? ' quick-duration-pill--active' : ''}`}
-                    onClick={() => setQuickDuration(d)}
+                {/* Config fields — only inside the active card */}
+                {isActive && (
+                  <div
+                    className="quick-method-card-config"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {formatDuration(d)}
-                  </button>
+                    {m.id === 'duration' && (
+                      <>
+                        <p className="quick-card-value">{formatDuration(quickDuration)}</p>
+                        <input
+                          type="range"
+                          className="quick-range"
+                          min={5} max={120} step={5}
+                          value={quickDuration}
+                          onChange={(e) => setQuickDuration(Number(e.target.value))}
+                          aria-label="Session duration"
+                        />
+                        <div className="quick-duration-pills">
+                          {DURATION_PILLS.map((d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              className={`quick-duration-pill${quickDuration === d ? ' quick-duration-pill--active' : ''}`}
+                              onClick={(e) => { e.stopPropagation(); setQuickDuration(d); }}
+                            >
+                              {formatDuration(d)}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {m.id === 'set-hours' && (
+                      <div className="quick-time-row">
+                        <span className="quick-time-label">From</span>
+                        <input
+                          type="time"
+                          className="block-time-input"
+                          value={quickFromTime}
+                          onChange={(e) => setQuickFromTime(e.target.value)}
+                          aria-label="Start time"
+                        />
+                        <span className="quick-time-label">to</span>
+                        <input
+                          type="time"
+                          className="block-time-input"
+                          value={quickUntilTime}
+                          onChange={(e) => setQuickUntilTime(e.target.value)}
+                          aria-label="End time"
+                        />
+                      </div>
+                    )}
+
+                    {m.id === 'usage-limit' && (
+                      <>
+                        <p className="quick-card-value">{quickUsageLimit} min/day</p>
+                        <input
+                          type="range"
+                          className="quick-range"
+                          min={15} max={240} step={15}
+                          value={quickUsageLimit}
+                          onChange={(e) => setQuickUsageLimit(Number(e.target.value))}
+                          aria-label="Max minutes per day"
+                        />
+                      </>
+                    )}
+
+                    {m.id === 'launch-count' && (
+                      <div className="quick-stepper">
+                        <button
+                          type="button"
+                          className="quick-stepper-btn"
+                          onClick={(e) => { e.stopPropagation(); setQuickLaunchCount((v) => Math.max(1, v - 1)); }}
+                          aria-label="Decrease"
+                        >−</button>
+                        <span className="quick-card-value">{quickLaunchCount}×/day</span>
+                        <button
+                          type="button"
+                          className="quick-stepper-btn"
+                          onClick={(e) => { e.stopPropagation(); setQuickLaunchCount((v) => Math.min(50, v + 1)); }}
+                          aria-label="Increase"
+                        >+</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Reminder + apps + start — only shown once a method is chosen */}
+        {quickMethod !== null && (
+          <>
+            {/* Reminder row */}
+            <div className="quick-reminder-row">
+              <span className="quick-reminder-label">Reminder</span>
+              <select
+                className="select quick-message-select"
+                value={quickMessageId}
+                onChange={(e) => setQuickMessageId(e.target.value)}
+              >
+                <option value="">Random</option>
+                {preset?.messages.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.text.length > 45 ? m.text.slice(0, 42) + '…' : m.text}
+                  </option>
                 ))}
-              </div>
-            </>
-          )}
-
-          {quickMethod === 'set-hours' && (
-            <div className="quick-time-row">
-              <span className="quick-time-label">From</span>
-              <input type="time" className="block-time-input" value={quickFromTime}
-                onChange={(e) => setQuickFromTime(e.target.value)} aria-label="Start time" />
-              <span className="quick-time-label">to</span>
-              <input type="time" className="block-time-input" value={quickUntilTime}
-                onChange={(e) => setQuickUntilTime(e.target.value)} aria-label="End time" />
-            </div>
-          )}
-
-          {quickMethod === 'usage-limit' && (
-            <>
-              <p className="quick-duration-big">{quickUsageLimit} min/day</p>
-              <input
-                type="range"
-                className="quick-range"
-                min={15} max={240} step={15}
-                value={quickUsageLimit}
-                onChange={(e) => setQuickUsageLimit(Number(e.target.value))}
-                aria-label="Max minutes per day"
-              />
-            </>
-          )}
-
-          {quickMethod === 'launch-count' && (
-            <div className="quick-stepper">
-              <button
-                type="button"
-                className="quick-stepper-btn"
-                onClick={() => setQuickLaunchCount((v) => Math.max(1, v - 1))}
-                aria-label="Decrease"
-              >−</button>
-              <span className="quick-duration-big">{quickLaunchCount} opens/day</span>
-              <button
-                type="button"
-                className="quick-stepper-btn"
-                onClick={() => setQuickLaunchCount((v) => Math.min(50, v + 1))}
-                aria-label="Increase"
-              >+</button>
-            </div>
-          )}
-        </div>
-
-        {/* Reminder row — compact */}
-        <div className="quick-reminder-row">
-          <span className="quick-reminder-label">Reminder</span>
-          <select
-            className="select quick-message-select"
-            value={quickMessageId}
-            onChange={(e) => setQuickMessageId(e.target.value)}
-          >
-            <option value="">Random</option>
-            {preset?.messages.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.text.length > 45 ? m.text.slice(0, 42) + '…' : m.text}
-              </option>
-            ))}
-            {settings.customMessages.map((cm) => (
-              <option key={cm.id} value={cm.id}>Custom: {cm.label}</option>
-            ))}
-          </select>
-          {quickMessageId && (
-            <button
-              type="button"
-              onClick={() => {
-                const msg = preset?.messages.find((m) => m.id === quickMessageId)
-                  ?? settings.customMessages.find((m) => m.id === quickMessageId);
-                if (msg) handlePreviewMessage(quickMessageId, 'text' in msg ? msg.text : '');
-              }}
-              aria-label={previewingId === quickMessageId ? 'Stop preview' : 'Preview message'}
-              className="quick-preview-btn"
-            >
-              {previewingId === quickMessageId ? '■' : '▶'}
-            </button>
-          )}
-        </div>
-
-        {/* Apps collapsible */}
-        <div className="quick-apps-row">
-          <div className="apps-section-header">
-            <span className="block-form-label" style={{ fontSize: '0.8125rem' }}>Apps</span>
-            <span className={`apps-badge${quickAllAppsSelected ? ' apps-badge--all' : ' apps-badge--custom'}`}>
-              {quickAppsBadge}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="apps-expand-btn"
-            onClick={() => setQuickAppsExpanded((v) => !v)}
-            aria-expanded={quickAppsExpanded}
-          >
-            {quickAppsExpanded ? '▲ Collapse' : '＋ Choose apps'}
-          </button>
-          {!quickAppsExpanded && quickAppsPreviewText && (
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.15rem 0 0' }}>
-              {quickAppsPreviewText}
-            </p>
-          )}
-          {quickAppsExpanded && (
-            <div className="apps-list" style={{ marginTop: '0.375rem' }}>
-              <div className="apps-recommended-row">
-                <button type="button" className="apps-recommended-btn"
-                  onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}>
-                  ＋ Social media block
-                </button>
-                <button type="button" className="apps-recommended-btn"
-                  onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}>
-                  ＋ High-usage block
-                </button>
-              </div>
-              {!quickAllAppsSelected && (
-                <button type="button" className="apps-select-all-btn"
-                  onClick={() => setQuickSelectedApps([...COMMON_APPS])}>
-                  Select all
+                {settings.customMessages.map((cm) => (
+                  <option key={cm.id} value={cm.id}>Custom: {cm.label}</option>
+                ))}
+              </select>
+              {quickMessageId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const msg = preset?.messages.find((m) => m.id === quickMessageId)
+                      ?? settings.customMessages.find((m) => m.id === quickMessageId);
+                    if (msg) handlePreviewMessage(quickMessageId, 'text' in msg ? msg.text : '');
+                  }}
+                  aria-label={previewingId === quickMessageId ? 'Stop preview' : 'Preview message'}
+                  className="quick-preview-btn"
+                >
+                  {previewingId === quickMessageId ? '■' : '▶'}
                 </button>
               )}
-              {APP_CATEGORIES.map((cat) => (
-                <div key={cat.label} className="apps-category-group">
-                  <div className="apps-category-header">
-                    <span className="apps-category-label">{cat.label.toUpperCase()}</span>
-                    <button type="button" className="apps-category-all-btn"
-                      onClick={() => selectCategoryApps(cat.apps)}>
-                      All
+            </div>
+
+            {/* Apps collapsible */}
+            <div className="quick-apps-row">
+              <div className="apps-section-header">
+                <span className="block-form-label" style={{ fontSize: '0.8125rem' }}>Apps</span>
+                <span className={`apps-badge${quickAllAppsSelected ? ' apps-badge--all' : ' apps-badge--custom'}`}>
+                  {quickAppsBadge}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="apps-expand-btn"
+                onClick={() => setQuickAppsExpanded((v) => !v)}
+                aria-expanded={quickAppsExpanded}
+              >
+                {quickAppsExpanded ? '▲ Collapse' : '＋ Choose apps'}
+              </button>
+              {!quickAppsExpanded && quickAppsPreviewText && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.15rem 0 0' }}>
+                  {quickAppsPreviewText}
+                </p>
+              )}
+              {quickAppsExpanded && (
+                <div className="apps-list" style={{ marginTop: '0.375rem' }}>
+                  <div className="apps-recommended-row">
+                    <button type="button" className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}>
+                      ＋ Social media block
+                    </button>
+                    <button type="button" className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}>
+                      ＋ High-usage block
                     </button>
                   </div>
-                  {cat.apps.map((app) => (
-                    <label key={app} className="apps-list-row">
-                      <input type="checkbox" checked={quickSelectedApps.includes(app)}
-                        onChange={() => toggleQuickApp(app)} className="apps-checkbox" />
-                      <span className="apps-list-name">{app}</span>
-                      {HIGH_USAGE_APPS.has(app) && (
-                        <span className="apps-high-usage-tag">📱 High usage</span>
-                      )}
-                    </label>
+                  {!quickAllAppsSelected && (
+                    <button type="button" className="apps-select-all-btn"
+                      onClick={() => setQuickSelectedApps([...COMMON_APPS])}>
+                      Select all
+                    </button>
+                  )}
+                  {APP_CATEGORIES.map((cat) => (
+                    <div key={cat.label} className="apps-category-group">
+                      <div className="apps-category-header">
+                        <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                        <button type="button" className="apps-category-all-btn"
+                          onClick={() => selectCategoryApps(cat.apps)}>
+                          All
+                        </button>
+                      </div>
+                      {cat.apps.map((app) => (
+                        <label key={app} className="apps-list-row">
+                          <input type="checkbox" checked={quickSelectedApps.includes(app)}
+                            onChange={() => toggleQuickApp(app)} className="apps-checkbox" />
+                          <span className="apps-list-name">{app}</span>
+                          {HIGH_USAGE_APPS.has(app) && (
+                            <span className="apps-high-usage-tag">📱 High usage</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Summary line */}
-        <div className="quick-summary-line">
-          <span className="quick-summary-method">{selectedMethodMeta.title}</span>
-          {quickMethod === 'duration' && <span className="quick-summary-value">{formatDuration(quickDuration)}</span>}
-          {quickMethod === 'set-hours' && <span className="quick-summary-value">{quickFromTime} – {quickUntilTime}</span>}
-          {quickMethod === 'usage-limit' && <span className="quick-summary-value">{quickUsageLimit} min/day</span>}
-          {quickMethod === 'launch-count' && <span className="quick-summary-value">{quickLaunchCount} opens/day</span>}
-        </div>
-
-        {/* Start button */}
-        <button
-          type="button"
-          className="button button-primary quick-start-btn"
-          onClick={handleStartNow}
-          style={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700 }}
-        >
-          Start offline block
-        </button>
+            {/* Start button */}
+            <button
+              type="button"
+              className="button button-primary quick-start-btn"
+              onClick={handleStartNow}
+              style={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700 }}
+            >
+              Start offline block
+            </button>
+          </>
+        )}
       </div>
     );
   }

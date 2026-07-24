@@ -1925,6 +1925,8 @@ input[type='range'] {
 .quick-method-card--active {
   border-color: var(--accent) !important;
   background: var(--accent-bg) !important;
+  /* expand naturally to hold config fields */
+  grid-column: span 2;
 }
 
 .quick-method-card-title {
@@ -1945,10 +1947,29 @@ input[type='range'] {
   margin-top: 0.2rem;
 }
 
-/* Method config area */
-.quick-method-config {
-  padding: 0 1.375rem;
-  margin-bottom: 0.75rem;
+/* Config fields rendered inside the active card */
+.quick-method-card-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  width: 100%;
+  text-align: left;
+}
+
+/* Large value inside the card (duration, count, etc.) */
+.quick-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stepper inside a card */
+.quick-method-card--active .quick-stepper {
+  gap: 1rem;
 }
 
 /* Reminder row */
