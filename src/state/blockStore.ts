@@ -33,6 +33,8 @@ export interface DetoxBlock {
   location: { lat: number; lng: number } | null;
   /** For "location" method: radius in meters (50 | 100 | 200 | 500) */
   locationRadius: number;
+  /** Apps excluded from this block. Empty = block applies to all apps. */
+  excludedApps: string[];
 }
 
 export interface BlockState {
@@ -79,6 +81,9 @@ function validateBlock(raw: unknown): DetoxBlock | null {
         ? { lat: (r.location as Record<string, unknown>).lat as number, lng: (r.location as Record<string, unknown>).lng as number }
         : null,
     locationRadius: typeof r.locationRadius === 'number' ? r.locationRadius : 100,
+    excludedApps: Array.isArray(r.excludedApps)
+      ? (r.excludedApps as unknown[]).filter((a): a is string => typeof a === 'string')
+      : [],
   };
 }
 

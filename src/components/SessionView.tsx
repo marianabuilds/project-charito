@@ -6,6 +6,8 @@ import { StrictOverlay } from './StrictOverlay';
 import { AudioMessageRow } from './AudioMessageRow';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { journalStore } from '../state/journalStore';
+import { speak } from '../services/audioEngine';
+import { toastStore } from '../state/toastStore';
 
 const JOURNAL_TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'] as const;
 
@@ -19,11 +21,16 @@ const AMBIENT_SOUNDS = [
 type QuickBlockingMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
 type QuickStep = 'method' | 'config' | 'message' | 'confirm';
 
-const QUICK_METHODS: { id: QuickBlockingMethod; title: string; description: string }[] = [
-  { id: 'duration', title: 'Duration', description: 'Stay offline for a set time' },
-  { id: 'set-hours', title: 'Set hours', description: 'Block during a time window' },
-  { id: 'usage-limit', title: 'Usage limit', description: 'Cap daily screen time' },
-  { id: 'launch-count', title: 'Launch count', description: 'Limit how many times you open apps' },
+const QUICK_METHODS: {
+  id: QuickBlockingMethod;
+  title: string;
+  description: string;
+  example: string;
+}[] = [
+  { id: 'duration', title: 'Duration', description: 'Full offline block', example: 'e.g. 30 min screen-free after lunch' },
+  { id: 'set-hours', title: 'Set hours', description: 'Gentle nudges', example: 'e.g. No phone 9 PM – 7 AM' },
+  { id: 'usage-limit', title: 'Usage limit', description: 'Cap screen time', example: 'e.g. Max 60 min of social media/day' },
+  { id: 'launch-count', title: 'Launch count', description: 'Fewer opens', example: 'e.g. Open Instagram max 5 times today' },
 ];
 
 function formatDuration(minutes: number): string {
@@ -68,6 +75,7 @@ export const SessionView: React.FC = () => {
   const [quickMessageId, setQuickMessageId] = React.useState('');
   const [quickCustomMessage, setQuickCustomMessage] = React.useState('');
   const [quickCustomAudio, setQuickCustomAudio] = React.useState(() => settingsStore.get().customMessageAudio);
+  const [previewingId, setPreviewingId] = React.useState<string | null>(null);
 
   const {
     isRecording: isRecordingMsg,
@@ -142,6 +150,18 @@ export const SessionView: React.FC = () => {
     reset();
   };
 
+  const handlePreviewMessage = (id: string, text: string) => {
+    if (previewingId === id) {
+      window.speechSynthesis.cancel();
+      setPreviewingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const settings = settingsStore.get();
+    setPreviewingId(id);
+    void speak(text, settings.languageCode).then(() => setPreviewingId(null));
+  };
+
   const handleStartNow = () => {
     // Apply duration if method is duration-based
     if (quickMethod === 'duration') {
@@ -158,6 +178,7 @@ export const SessionView: React.FC = () => {
     // Reset step for next time
     setQuickStep('method');
     start();
+    toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
 
   const settings = settingsStore.get();
@@ -201,6 +222,7 @@ export const SessionView: React.FC = () => {
                 >
                   <span className="quick-method-name">{m.title}</span>
                   <span className="quick-method-desc">{m.description}</span>
+                  <span className="method-example">{m.example}</span>
                 </button>
               ))}
             </div>
@@ -315,7 +337,7 @@ export const SessionView: React.FC = () => {
           </>
         )}
 
-        {/* ── Step 3: Pick a message ───────────────────────────────────── */}
+        {/* ── Step 3: Pick a message (shown for ALL methods) ───────────────────────────────────── */}
         {quickStep === 'message' && (
           <>
             <button
@@ -339,18 +361,36 @@ export const SessionView: React.FC = () => {
                 />
                 <span className="quick-message-text">Random</span>
               </label>
-              {/* Cultural messages */}
+              {/* Cultural messages with voice preview */}
               {preset?.messages.map((m) => (
-                <AudioMessageRow
-                  key={m.id}
-                  text={m.text}
-                  name="quick-message"
-                  value={m.id}
-                  checked={quickMessageId === m.id}
-                  onChange={() => setQuickMessageId(m.id)}
-                  className="quick-message-row"
-                  textClassName="quick-message-text"
-                />
+                <div key={m.id} className="quick-message-row" style={{ alignItems: 'center' }}>
+                  <AudioMessageRow
+                    text={m.text}
+                    name="quick-message"
+                    value={m.id}
+                    checked={quickMessageId === m.id}
+                    onChange={() => setQuickMessageId(m.id)}
+                    className=""
+                    textClassName="quick-message-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewMessage(m.id, m.text)}
+                    aria-label={previewingId === m.id ? 'Stop preview' : 'Preview message'}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-m, #888)',
+                      flexShrink: 0,
+                      marginLeft: 'auto',
+                      padding: '0 0.25rem',
+                    }}
+                  >
+                    {previewingId === m.id ? '■' : '▶'}
+                  </button>
+                </div>
               ))}
               {/* Custom */}
               <label className="quick-message-row">
@@ -502,6 +542,10 @@ export const SessionView: React.FC = () => {
               <div className="quick-confirm-row">
                 <span className="quick-confirm-label">Message</span>
                 <span className="quick-confirm-value">{quickMessagePreview}</span>
+              </div>
+              <div className="quick-confirm-row">
+                <span className="quick-confirm-label">Applies to</span>
+                <span className="quick-confirm-value">All apps</span>
               </div>
             </div>
             <button

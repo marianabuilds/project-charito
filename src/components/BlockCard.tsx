@@ -5,20 +5,31 @@ import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { toastStore } from '../state/toastStore';
 
 // Single-letter day labels: S M T W T F S
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const BLOCKING_METHODS: { id: BlockingMethod; title: string; description: string }[] = [
-  { id: 'duration', title: 'Duration', description: 'Stay offline for a set time' },
-  { id: 'set-hours', title: 'Set hours', description: 'Block during a time window' },
-  { id: 'usage-limit', title: 'Usage limit', description: 'Cap daily screen time' },
-  { id: 'launch-count', title: 'Launch count', description: 'Limit how many times you open apps' },
-  { id: 'location', title: 'Location', description: 'Remind me when I\'m at a specific spot' },
+const BLOCKING_METHODS: {
+  id: BlockingMethod;
+  title: string;
+  description: string;
+  example: string;
+}[] = [
+  { id: 'duration', title: 'Duration', description: 'Full offline block', example: 'e.g. 30 min screen-free after lunch' },
+  { id: 'set-hours', title: 'Set hours', description: 'Gentle nudges', example: 'e.g. No phone 9 PM – 7 AM' },
+  { id: 'usage-limit', title: 'Usage limit', description: 'Cap screen time', example: 'e.g. Max 60 min of social media/day' },
+  { id: 'launch-count', title: 'Launch count', description: 'Fewer opens', example: 'e.g. Open Instagram max 5 times today' },
+  { id: 'location', title: 'Location', description: 'Remind me at a spot', example: 'e.g. Phone-free at the dinner table' },
 ];
 
 const LOCATION_RADII = [50, 100, 200, 500] as const;
+
+const COMMON_APPS = [
+  'Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook',
+  'Snapchat', 'Reddit', 'WhatsApp', 'LinkedIn', 'Safari/Chrome', 'Games',
+];
 
 function formatDuration(minutes: number): string {
   if (minutes <= 60) return `${minutes} min`;
@@ -94,6 +105,8 @@ interface FormState {
   locationRadius: number;
   locationLoading: boolean;
   locationError: string;
+  excludedApps: string[];
+  appsExpanded: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -112,6 +125,8 @@ const EMPTY_FORM: FormState = {
   locationRadius: 100,
   locationLoading: false,
   locationError: '',
+  excludedApps: [],
+  appsExpanded: false,
 };
 
 export const BlockCard: React.FC = () => {
@@ -205,10 +220,12 @@ export const BlockCard: React.FC = () => {
       active: true,
       location: form.location,
       locationRadius: form.locationRadius,
+      excludedApps: [...form.excludedApps],
     };
     const current = blockStore.get();
     blockStore.set({ blocks: [...current.blocks, block] });
     cancelForm();
+    toastStore.show("✓ Block scheduled. You'll receive a voice reminder when this block is active.");
   };
 
   const handleDelete = (id: string) => {
@@ -237,11 +254,25 @@ export const BlockCard: React.FC = () => {
     }));
   };
 
+  const toggleExcludeApp = (app: string) => {
+    setForm((f) => ({
+      ...f,
+      excludedApps: f.excludedApps.includes(app)
+        ? f.excludedApps.filter((a) => a !== app)
+        : [...f.excludedApps, app],
+    }));
+  };
+
   // Validate save: set-hours requires both times; location requires a saved location
   const canSave =
     (form.blockingMethod !== 'set-hours' ||
       (form.setHoursStart.length > 0 && form.setHoursEnd.length > 0)) &&
     (form.blockingMethod !== 'location' || form.location !== null);
+
+  const includedCount = COMMON_APPS.length - form.excludedApps.length;
+  const appsBadge = form.excludedApps.length === 0
+    ? 'All apps'
+    : `${includedCount} app${includedCount === 1 ? '' : 's'}`;
 
   return (
     <div className="block-card">
@@ -319,6 +350,7 @@ export const BlockCard: React.FC = () => {
                   >
                     <span className="blocking-method-title">{m.title}</span>
                     <span className="blocking-method-desc">{m.description}</span>
+                    <span className="method-example">{m.example}</span>
                   </button>
 
                   {/* Inline expansion — shown immediately below the selected method */}
@@ -469,10 +501,43 @@ export const BlockCard: React.FC = () => {
             </div>
           </div>
 
-          {/* 4. Message */}
+          {/* 4. Apps */}
+          <div className="block-form-row">
+            <div className="apps-section-header">
+              <span className="block-form-label">Apps</span>
+              <span className={`apps-badge${form.excludedApps.length === 0 ? ' apps-badge--all' : ' apps-badge--custom'}`}>
+                {appsBadge}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="apps-expand-btn"
+              onClick={() => setForm((f) => ({ ...f, appsExpanded: !f.appsExpanded }))}
+              aria-expanded={form.appsExpanded}
+            >
+              {form.appsExpanded ? '▲ Hide app list' : '＋ Customize apps'}
+            </button>
+            {form.appsExpanded && (
+              <div className="apps-list">
+                {COMMON_APPS.map((app) => (
+                  <label key={app} className="apps-list-row">
+                    <input
+                      type="checkbox"
+                      checked={!form.excludedApps.includes(app)}
+                      onChange={() => toggleExcludeApp(app)}
+                      className="apps-checkbox"
+                    />
+                    <span className="apps-list-name">{app}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 5. Message */}
           <div className="block-form-row">
             <label className="block-form-label" htmlFor="block-message">
-              Message
+              Reminder message
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <select
@@ -601,7 +666,7 @@ export const BlockCard: React.FC = () => {
             </div>
           )}
 
-          {/* 5. Snooze */}
+          {/* 6. Snooze */}
           <div className="block-form-row">
             <label className="block-form-label" htmlFor="block-snooze">
               Snooze
@@ -619,7 +684,7 @@ export const BlockCard: React.FC = () => {
             </select>
           </div>
 
-          {/* 6. Save / Cancel */}
+          {/* 7. Save / Cancel */}
           <div className="block-form-actions">
             <button
               type="button"

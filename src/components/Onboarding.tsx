@@ -27,7 +27,7 @@ function markOnboarded(): void {
   }
 }
 
-type OnboardingScreen = 1 | 2 | 3 | 4;
+type OnboardingScreen = 1 | 2 | 3 | 4 | 5;
 
 export const Onboarding: React.FC = () => {
   const [visible, setVisible] = React.useState(!hasOnboarded());
@@ -160,8 +160,59 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* Screen 4 — Done */}
+        {/* Screen 4 — Pricing */}
         {screen === 4 && (
+          <div className="onboarding-screen">
+            <h1 className="onboarding-heading">Free to start</h1>
+            <p className="onboarding-subtext">
+              Charito is free to download and use. When you're ready, a premium plan unlocks
+              unlimited detox blocks, session history, weekly digests, and advanced blocking methods.
+            </p>
+            <p className="onboarding-subtext" style={{ fontWeight: 600, color: 'var(--text-h)' }}>
+              No charge today. You'll only be asked to subscribe when you hit the free-tier limit (3 detox blocks).
+            </p>
+
+            {/* Pricing card */}
+            <div className="pricing-card">
+              <div className="pricing-tier">
+                <div className="pricing-tier-header">
+                  <span className="pricing-tier-name">Free</span>
+                </div>
+                <ul className="pricing-tier-features">
+                  <li>3 detox blocks</li>
+                  <li>Core reminders</li>
+                  <li>1 culture preset</li>
+                </ul>
+              </div>
+              <div className="pricing-tier pricing-tier--premium">
+                <div className="pricing-tier-header">
+                  <span className="pricing-tier-name">Premium</span>
+                  <span className="pricing-tier-price">$2.99/mo</span>
+                </div>
+                <ul className="pricing-tier-features">
+                  <li>Unlimited blocks</li>
+                  <li>All cultures</li>
+                  <li>Session history</li>
+                  <li>Weekly digest</li>
+                </ul>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="button button-primary onboarding-btn"
+              onClick={() => setScreen(5)}
+            >
+              Continue
+            </button>
+            <p className="onboarding-billing-note">
+              You can manage billing anytime in Settings.
+            </p>
+          </div>
+        )}
+
+        {/* Screen 5 — Done */}
+        {screen === 5 && (
           <div className="onboarding-screen">
             <h1 className="onboarding-heading">You're all set.</h1>
             <p className="onboarding-subtext">
@@ -179,7 +230,7 @@ export const Onboarding: React.FC = () => {
 
         {/* Dot indicators */}
         <div className="onboarding-dots" aria-hidden="true">
-          {([1, 2, 3, 4] as OnboardingScreen[]).map((s) => (
+          {([1, 2, 3, 4, 5] as OnboardingScreen[]).map((s) => (
             <span
               key={s}
               className={`onboarding-dot${screen === s ? ' onboarding-dot--active' : ''}`}

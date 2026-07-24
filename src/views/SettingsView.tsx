@@ -2,6 +2,8 @@ import React from 'react';
 import { CultureSelector } from '../components/CultureSelector';
 import { ModeToggle } from '../components/ModeToggle';
 import { MessageSelector } from '../components/MessageSelector';
+import { planStore } from '../state/planStore';
+import type { Plan } from '../state/planStore';
 
 const StatsCard: React.FC = () => (
   <div className="stats-card card">
@@ -180,6 +182,150 @@ const PermissionsSection: React.FC = () => {
   );
 };
 
+const BillingSection: React.FC = () => {
+  const [plan, setPlan] = React.useState<Plan>(() => planStore.get().plan);
+  const [upgradeOpen, setUpgradeOpen] = React.useState(false);
+  const [toast, setToast] = React.useState(false);
+
+  React.useEffect(() => {
+    return planStore.subscribe((s) => setPlan(s.plan));
+  }, []);
+
+  const handleSubscribeClick = () => {
+    setToast(true);
+    setTimeout(() => setToast(false), 3000);
+  };
+
+  return (
+    <>
+      <div className="permissions-section">
+        <p className="permissions-section-title">BILLING</p>
+
+        {/* Current plan row */}
+        <div className="permissions-row permissions-row--data">
+          <div className="permissions-row-left">
+            <span className="permissions-row-label">Current plan</span>
+          </div>
+          <div className="permissions-row-right">
+            {plan === 'free' ? (
+              <span className="plan-badge plan-badge--free">Free</span>
+            ) : (
+              <span className="plan-badge plan-badge--premium">Premium</span>
+            )}
+          </div>
+        </div>
+
+        {/* Upgrade row */}
+        {plan === 'free' && (
+          <div
+            className="permissions-row"
+            role="button"
+            tabIndex={0}
+            onClick={() => setUpgradeOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setUpgradeOpen(true);
+            }}
+            aria-label="Upgrade to Premium"
+          >
+            <div className="permissions-row-left">
+              <span className="permissions-row-label" style={{ color: 'var(--sage-green, #5a7a5a)' }}>
+                Upgrade to Premium →
+              </span>
+              <span className="permissions-row-desc">Unlimited blocks, all cultures &amp; more</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Upgrade modal */}
+      {upgradeOpen && (
+        <div
+          className="billing-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Upgrade to Premium"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUpgradeOpen(false);
+          }}
+        >
+          <div className="billing-modal">
+            <button
+              type="button"
+              className="billing-modal-close"
+              onClick={() => setUpgradeOpen(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <h2 className="billing-modal-title">Upgrade to Premium</h2>
+            <p className="billing-modal-subtitle">
+              Unlock the full Charito experience.
+            </p>
+
+            <div className="pricing-card">
+              <div className="pricing-tier">
+                <div className="pricing-tier-header">
+                  <span className="pricing-tier-name">Free</span>
+                </div>
+                <ul className="pricing-tier-features">
+                  <li>3 detox blocks</li>
+                  <li>Core reminders</li>
+                  <li>1 culture preset</li>
+                </ul>
+              </div>
+              <div className="pricing-tier pricing-tier--premium">
+                <div className="pricing-tier-header">
+                  <span className="pricing-tier-name">Premium</span>
+                  <span className="pricing-tier-price">$2.99/mo</span>
+                </div>
+                <ul className="pricing-tier-features">
+                  <li>Unlimited blocks</li>
+                  <li>All cultures</li>
+                  <li>Session history</li>
+                  <li>Weekly digest</li>
+                </ul>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="button button-primary"
+              style={{ marginTop: '1rem' }}
+              onClick={handleSubscribeClick}
+            >
+              Subscribe — $2.99/mo
+            </button>
+
+            {toast && (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: 'var(--sage-green, #5a7a5a)',
+                  textAlign: 'center',
+                  margin: '0.5rem 0 0',
+                }}
+              >
+                Billing coming soon
+              </p>
+            )}
+
+            <p
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-m)',
+                textAlign: 'center',
+                marginTop: '0.75rem',
+              }}
+            >
+              You can manage billing anytime in Settings.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 export const SettingsView: React.FC = () => {
   const handleRevisitOnboarding = () => {
     try {
@@ -209,6 +355,8 @@ export const SettingsView: React.FC = () => {
       </div>
 
       <PermissionsSection />
+
+      <BillingSection />
 
       <div className="permissions-section">
         <p className="permissions-section-title">ACCOUNT</p>

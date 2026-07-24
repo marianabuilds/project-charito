@@ -2,6 +2,7 @@ import React from 'react';
 import { TabBar } from './components/TabBar';
 import type { ViewId } from './components/TabBar';
 import { Onboarding } from './components/Onboarding';
+import { Toast } from './components/Toast';
 import { SessionProvider } from './state/SessionContext';
 import './styles/global.css';
 import './App.css';
@@ -33,6 +34,7 @@ export const App: React.FC = () => {
         </React.Suspense>
         <TabBar active={view} onChange={setView} />
         <Onboarding />
+        <Toast />
       </div>
     </SessionProvider>
   );
