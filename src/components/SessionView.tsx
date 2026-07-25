@@ -179,7 +179,7 @@ export const SessionView: React.FC = () => {
   if (status === 'idle') {
     return (
       <div className="quick-session-card">
-        <p className="quick-section-label">Quick offline block</p>
+        <p className="quick-section-label">Start your detox journey</p>
 
         {/* 2×2 method card grid — config expands inside the selected card */}
         <div className="quick-method-grid">

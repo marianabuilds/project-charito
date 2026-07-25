@@ -8,6 +8,27 @@ import { culturalPresets } from '../data/culturalPresets';
 import { settingsStore } from '../state/settingsStore';
 import { speak } from '../services/audioEngine';
 import type { DetoxBlock } from '../state/blockStore';
+import { generateRecommendations } from '../utils/recommendations';
+import type { Recommendation } from '../utils/recommendations';
+
+// ─── Compact Smart Strip (home screen) ────────────────────────────────────
+
+function getHomeSuggestionEmoji(type: Recommendation['type'], appName: string): string {
+  if (type === 'set-hours') return '🌙';
+  if (type === 'usage-limit') return '📊';
+  if (type === 'launch-count') return '🔁';
+  void appName;
+  return '💡';
+}
+
+function getHomeSuggestionLabel(rec: Recommendation): string {
+  if (rec.type === 'set-hours') return `Block ${rec.appName} after 8 PM`;
+  if (rec.type === 'usage-limit') return `Cap ${rec.appName} to ${rec.defaultValue} min/day`;
+  if (rec.type === 'launch-count') return `Limit ${rec.appName} to ${rec.defaultValue} opens/day`;
+  return `Focus block for ${rec.appName}`;
+}
+
+// ─── Rotating messages ────────────────────────────────────────────────────
 
 const ROTATING_MESSAGES = [
   'Every minute offline is a minute truly yours.',
@@ -35,6 +56,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
 
   const [msgIndex, setMsgIndex] = React.useState(0);
   const [msgVisible, setMsgVisible] = React.useState(true);
+
+  // Smart suggestions — top 2 from recommendations engine
+  const homeSuggestions = React.useMemo(() => generateRecommendations().slice(0, 2), []);
 
   // Did-you-know strip — random fact each session
   const [didYouKnowFact] = React.useState(() => {
@@ -109,6 +133,31 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
           <span className="did-you-know-text">{didYouKnowFact}</span>
         </div>
       </header>
+
+      {/* ── Smart suggestions strip ───────────────────────────────────────── */}
+      {homeSuggestions.length > 0 && (
+        <section aria-label="Smart suggestions" className="home-smart-strip">
+          <p className="home-smart-strip-header">
+            <span className="home-smart-strip-title">Smart for you</span>
+            <span className="home-smart-strip-sub">Based on your usage</span>
+          </p>
+          {homeSuggestions.map((rec) => (
+            <div key={rec.id} className="home-smart-item">
+              <span className="home-smart-label">
+                {getHomeSuggestionEmoji(rec.type, rec.appName)}{' '}
+                {getHomeSuggestionLabel(rec)}
+              </span>
+              <button
+                type="button"
+                className="home-smart-btn"
+                onClick={onNavigateToBlocks}
+              >
+                Block it →
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section aria-label="Active session">
         <SessionView />

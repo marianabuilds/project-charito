@@ -60,6 +60,8 @@ export const Onboarding: React.FC = () => {
   const [screen, setScreen] = React.useState<OnboardingScreen>(1);
   const [selectedGoals, setSelectedGoals] = React.useState<string[]>([]);
   const [detoxIntensity, setDetoxIntensity] = React.useState<DetoxIntensity>('moderate');
+  const [navDirection, setNavDirection] = React.useState<'forward' | 'back' | null>(null);
+  const touchStartX = React.useRef<number | null>(null);
 
   // Live preview countdown
   const [previewSecs, setPreviewSecs] = React.useState(90);
@@ -73,6 +75,29 @@ export const Onboarding: React.FC = () => {
   });
   const [appUsageStatus, setAppUsageStatus] = React.useState<'idle' | 'coming-soon'>('idle');
   const [micStatus, setMicStatus] = React.useState<MicStatus>('idle');
+
+  const goToScreen = (next: OnboardingScreen, direction: 'forward' | 'back') => {
+    setNavDirection(direction);
+    setScreen(next);
+    // Reset direction after animation completes
+    const t = setTimeout(() => setNavDirection(null), 300);
+    return () => clearTimeout(t);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (deltaX > 50 && screen > 1) {
+      goToScreen((screen - 1) as OnboardingScreen, 'back');
+    } else if (deltaX < -50 && screen < 8) {
+      goToScreen((screen + 1) as OnboardingScreen, 'forward');
+    }
+  };
 
   const dismiss = () => { markOnboarded(); setVisible(false); };
 
@@ -137,7 +162,12 @@ export const Onboarding: React.FC = () => {
 
   return (
     <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Charito">
-      <div className="onboarding-container">
+      <div
+        className="onboarding-container"
+        data-direction={navDirection ?? undefined}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
 
         {/* ── Screen 1 — Intro ─────────────────────────────────────────── */}
         {screen === 1 && (
@@ -151,7 +181,7 @@ export const Onboarding: React.FC = () => {
 
             <h1 className="onboarding-heading">Put the phone down.</h1>
             <p className="onboarding-subtext">
-              Charito is a <strong>screen and apps detox</strong> companion — culturally rooted, honest, and human.
+              Charito is your <strong>screen and apps detox</strong> companion.
             </p>
 
             {/* Benefit pills */}
@@ -206,7 +236,6 @@ export const Onboarding: React.FC = () => {
         {screen === 3 && (
           <div className="onboarding-screen">
             <button type="button" className="onboarding-back-btn" onClick={() => setScreen(2)}>&#8592;</button>
-            <h1 className="onboarding-heading">What do you want more of?</h1>
             <p className="onboarding-subtext">
               We'll personalize your reminders around what matters to you.
             </p>

@@ -1150,7 +1150,12 @@ input[type='range'] {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 1.375rem;
+  padding: 1.25rem;
+  margin: 0;
+}
+
+@media (min-width: 600px) {
+  .quick-session-card { padding: 2rem; }
 }
 
 /* Section labels — uppercase, small, spaced */
@@ -3511,4 +3516,91 @@ input[type='range'] {
   gap: 0.2rem;
   flex: 1;
   text-align: left;
+}
+
+/* ── Onboarding swipe slide transition ──────────────────────────────────── */
+@keyframes slideInLeft {
+  from { transform: translateX(48px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(-48px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+.onboarding-container[data-direction="forward"] .onboarding-screen {
+  animation: slideInLeft 250ms ease both;
+}
+
+.onboarding-container[data-direction="back"] .onboarding-screen {
+  animation: slideInRight 250ms ease both;
+}
+
+/* ── Home smart suggestions strip ───────────────────────────────────────── */
+.home-smart-strip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.home-smart-strip-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.home-smart-strip-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-h);
+}
+
+.home-smart-strip-sub {
+  font-size: 0.7rem;
+  color: var(--text-m);
+}
+
+.home-smart-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.home-smart-item:last-child {
+  border-bottom: none;
+}
+
+.home-smart-label {
+  font-size: 0.875rem;
+  color: var(--text-h);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.home-smart-btn {
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.home-smart-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
