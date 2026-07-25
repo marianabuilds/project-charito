@@ -1,6 +1,7 @@
 package com.marianabuilds.charito;
 
 import com.getcapacitor.BridgeActivity;
+import com.marianabuilds.charito.UsageStatsPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override
