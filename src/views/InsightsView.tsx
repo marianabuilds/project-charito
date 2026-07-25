@@ -215,6 +215,135 @@ const TopAppsCard: React.FC<TopAppsCardProps> = ({ onBlockApp }) => {
   );
 };
 
+// ── Smart Recommendations ─────────────────────────────────────────────────
+
+type BlockMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count';
+
+interface Recommendation {
+  app: PerAppStat;
+  method: BlockMethod;
+  reason: string;
+  label: string;        // e.g. "Max 30 min/day"
+}
+
+function generateRecommendations(stats: PerAppStat[]): Recommendation[] {
+  const SOCIAL = new Set(['Instagram', 'TikTok', 'Twitter / X', 'Facebook', 'Snapchat', 'Reddit']);
+  const recs: Recommendation[] = [];
+
+  for (const app of stats.slice(0, 6)) {
+    const dailyMin = Math.round(app.totalMinutes / 7);
+
+    if (app.launchCount >= 20) {
+      // Opened very frequently → limit launches
+      const cap = Math.max(5, Math.round(app.launchCount / 7 / 2));
+      recs.push({
+        app,
+        method: 'launch-count',
+        reason: `You opened ${app.appName} ~${Math.round(app.launchCount / 7)}× a day`,
+        label: `Max ${cap} opens/day`,
+      });
+    } else if (SOCIAL.has(app.appName) && dailyMin >= 30) {
+      // Heavy social media evening use → set hours block
+      recs.push({
+        app,
+        method: 'set-hours',
+        reason: `${app.appName} keeps you up — block it after 8 PM`,
+        label: 'Block 8 PM – 7 AM',
+      });
+    } else if (dailyMin >= 45) {
+      // High daily usage → cap it
+      const cap = Math.max(15, Math.round(dailyMin * 0.6 / 15) * 15);
+      recs.push({
+        app,
+        method: 'usage-limit',
+        reason: `You average ${dailyMin} min/day on ${app.appName}`,
+        label: `Max ${cap} min/day`,
+      });
+    } else if (dailyMin >= 20) {
+      // Moderate use → focused duration block
+      recs.push({
+        app,
+        method: 'duration',
+        reason: `Take a 30-min break from ${app.appName}`,
+        label: '30 min offline block',
+      });
+    }
+
+    if (recs.length >= 3) break;
+  }
+  return recs;
+}
+
+const METHOD_EMOJI: Record<BlockMethod, string> = {
+  'duration': '⏱',
+  'set-hours': '🌙',
+  'usage-limit': '📊',
+  'launch-count': '🔢',
+};
+
+interface SmartRecsProps {
+  stats: PerAppStat[];
+  onAccept: (app: PerAppStat) => void;
+}
+
+const SmartRecommendations: React.FC<SmartRecsProps> = ({ stats, onAccept }) => {
+  const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const recs = generateRecommendations(stats).filter((r) => !dismissed.has(r.app.packageName));
+
+  if (recs.length === 0) return null;
+
+  return (
+    <section aria-label="Smart block suggestions" style={{ marginBottom: '1.5rem' }}>
+      <h2 className="insights-section-title">Smart suggestions</h2>
+      <p className="insights-section-subtitle">Based on your usage this week.</p>
+      <div className="smart-recs-list">
+        {recs.map((rec) => (
+          <div key={rec.app.packageName} className="smart-rec-card">
+            <div className="smart-rec-top">
+              <span className="smart-rec-emoji" aria-hidden="true">{METHOD_EMOJI[rec.method]}</span>
+              <div className="smart-rec-text">
+                <p className="smart-rec-app">{rec.app.appName}</p>
+                <p className="smart-rec-reason">{rec.reason}</p>
+              </div>
+            </div>
+            <div className="smart-rec-footer">
+              <span className="smart-rec-label">{rec.label}</span>
+              <div className="smart-rec-actions">
+                <button
+                  type="button"
+                  className="button button-primary smart-rec-accept"
+                  onClick={() => onAccept(rec.app)}
+                >
+                  Create block
+                </button>
+                <button
+                  type="button"
+                  className="smart-rec-skip"
+                  onClick={() => setDismissed((prev) => new Set([...prev, rec.app.packageName]))}
+                  aria-label="Skip suggestion"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const SmartRecsWrapper: React.FC<{ onNavigateToBlocks?: (app?: string) => void }> = ({ onNavigateToBlocks }) => {
+  const { stats, status } = useUsageStats(8);
+  if (status !== 'ready' || stats.length === 0) return null;
+  return (
+    <SmartRecommendations
+      stats={stats}
+      onAccept={(app) => onNavigateToBlocks?.(app.appName)}
+    />
+  );
+};
+
 interface InsightsViewProps {
   onNavigateToBlocks?: (prefilledApp?: string) => void;
 }
@@ -257,10 +386,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ onNavigateToBlocks }
       </header>
 
 
-      {/* ── Top Apps (native Android data) ───────────────────────────────── */}
+      {/* ── Top Apps + Smart Recommendations ────────────────────────────── */}
       <TopAppsCard
         onBlockApp={(app) => onNavigateToBlocks?.(app.appName)}
       />
+      <SmartRecsWrapper onNavigateToBlocks={onNavigateToBlocks} />
 
       {/* ── Trigger patterns ──────────────────────────────────────────────── */}
       <section aria-label="Trigger patterns" style={{ marginBottom: '1.5rem' }}>

@@ -4,6 +4,19 @@ import { UsageStats } from '../plugins/UsageStats';
 import { screenTimeStore } from '../state/screenTimeStore';
 import type { PerAppStat } from '../state/screenTimeStore';
 
+// ── Demo / preview data (shown on web so you can preview the UI in localhost) ──
+
+const DEMO_STATS: PerAppStat[] = [
+  { packageName: 'com.instagram.android',      appName: 'Instagram',   totalMinutes: 204, launchCount: 47, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.zhiliaoapp.musically',   appName: 'TikTok',      totalMinutes: 130, launchCount: 32, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.google.android.youtube', appName: 'YouTube',     totalMinutes: 100, launchCount: 18, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.twitter.android',        appName: 'Twitter / X', totalMinutes:  58, launchCount: 29, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.reddit.frontpage',       appName: 'Reddit',      totalMinutes:  34, launchCount: 12, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.netflix.mediaclient',    appName: 'Netflix',     totalMinutes:  90, launchCount:  6, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.whatsapp',               appName: 'WhatsApp',    totalMinutes:  45, launchCount: 38, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+  { packageName: 'com.discord',                appName: 'Discord',     totalMinutes:  22, launchCount: 11, lastUsed: new Date().toISOString(), syncedAt: new Date().toISOString() },
+];
+
 // ── Status type ────────────────────────────────────────────────────────────
 
 export type UsageStatsStatus =
@@ -75,13 +88,15 @@ function applyFriendlyName(packageName: string, nativeLabel: string): string {
  *   called (e.g. after the user returns from the permission settings screen).
  */
 export function useUsageStats(topN = 5): UseUsageStatsResult {
-  const isAvailable = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  // On web we show demo data so the UI is previewable in localhost
+  const isAvailable = true;
 
   const [status, setStatus] = React.useState<UsageStatsStatus>(
-    isAvailable ? 'idle' : 'unavailable',
+    isNativeAndroid ? 'idle' : 'ready',
   );
   const [stats, setStats] = React.useState<PerAppStat[]>(() =>
-    screenTimeStore.getPerApp(),
+    isNativeAndroid ? screenTimeStore.getPerApp() : DEMO_STATS,
   );
   const [error, setError] = React.useState<string | null>(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -91,12 +106,12 @@ export function useUsageStats(topN = 5): UseUsageStatsResult {
   }, []);
 
   const openPermissionSettings = React.useCallback(() => {
-    if (!isAvailable) return;
+    if (!isNativeAndroid) return;
     void UsageStats.openUsageAccessSettings();
-  }, [isAvailable]);
+  }, [isNativeAndroid]);
 
   React.useEffect(() => {
-    if (!isAvailable) return;
+    if (!isNativeAndroid) return; // web: demo data already set in useState
 
     let cancelled = false;
     setStatus('loading');
@@ -135,7 +150,7 @@ export function useUsageStats(topN = 5): UseUsageStatsResult {
     })();
 
     return () => { cancelled = true; };
-  }, [isAvailable, refreshKey]);
+  }, [isNativeAndroid, refreshKey]);
 
   // Also sync from store subscription so other components sharing the store
   // see updates without needing to call the hook themselves.

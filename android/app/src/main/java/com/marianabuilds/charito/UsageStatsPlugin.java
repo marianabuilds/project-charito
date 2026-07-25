@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Process;
 import android.provider.Settings;
 
@@ -110,9 +109,8 @@ public class UsageStatsPlugin extends Plugin {
                     aggregated.put(pkg, agg);
                 }
                 agg[0] += stat.getTotalTimeInForeground();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    agg[1] += stat.getAppLaunchCount();
-                }
+                // launchCount left as 0 — getAppLaunchCount() requires SDK level
+                // that may not be available in all build environments
                 if (stat.getLastTimeUsed() > agg[2]) {
                     agg[2] = stat.getLastTimeUsed();
                 }
