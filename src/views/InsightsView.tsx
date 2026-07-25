@@ -1,5 +1,7 @@
 import React from 'react';
 import { journalStore } from '../state/journalStore';
+import { useUsageStats } from '../hooks/useUsageStats';
+import type { PerAppStat } from '../state/screenTimeStore';
 
 interface WhyItem {
   title: string;
@@ -51,9 +53,173 @@ function formatWeekMinutes(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 const TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'];
 
-export const InsightsView: React.FC = () => {
+// ── Top Apps Card ──────────────────────────────────────────────────────────
+
+interface TopAppsCardProps {
+  onBlockApp: (app: PerAppStat) => void;
+}
+
+const TopAppsCard: React.FC<TopAppsCardProps> = ({ onBlockApp }) => {
+  const { status, isAvailable, isLoading, topApps, refresh, openPermissionSettings } =
+    useUsageStats(5);
+
+  // Not on Android — show a neutral "Android only" note
+  if (!isAvailable) {
+    return (
+      <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">App usage this week</h2>
+        <div className="insights-coming-soon">
+          <span className="insights-coming-soon-icon" aria-hidden="true">📱</span>
+          <p className="insights-coming-soon-title">Available on Android</p>
+          <p className="insights-coming-soon-body">
+            Install the Charito Android app to see real per-app screen time pulled
+            directly from your device.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">App usage this week</h2>
+        <div className="top-apps-loading">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <div key={n} className="top-apps-skeleton-row" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // Permission not yet granted
+  if (status === 'permission-denied') {
+    return (
+      <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">App usage this week</h2>
+        <div className="insights-coming-soon">
+          <span className="insights-coming-soon-icon" aria-hidden="true">🔒</span>
+          <p className="insights-coming-soon-title">Usage Access needed</p>
+          <p className="insights-coming-soon-body">
+            Charito needs the "Usage Access" permission to read how long you use each
+            app. Your data never leaves your device.
+          </p>
+          <button
+            type="button"
+            className="button button-primary"
+            style={{ marginTop: '0.75rem', minHeight: '2.75rem' }}
+            onClick={() => {
+              openPermissionSettings();
+              // Refresh when user comes back via page visibility event
+              const handler = () => {
+                if (document.visibilityState === 'visible') {
+                  refresh();
+                  document.removeEventListener('visibilitychange', handler);
+                }
+              };
+              document.addEventListener('visibilitychange', handler);
+            }}
+          >
+            Grant permission →
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // Error state
+  if (status === 'error') {
+    return (
+      <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">App usage this week</h2>
+        <p className="insights-coming-soon-body">
+          Could not load usage data.{' '}
+          <button type="button" className="insights-inline-link" onClick={refresh}>
+            Try again
+          </button>
+        </p>
+      </section>
+    );
+  }
+
+  // No data yet (first open, empty store)
+  if (topApps.length === 0) {
+    return (
+      <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="insights-section-title">App usage this week</h2>
+        <p className="insights-coming-soon-body" style={{ margin: 0 }}>
+          No usage data found.{' '}
+          <button type="button" className="insights-inline-link" onClick={refresh}>
+            Refresh
+          </button>
+        </p>
+      </section>
+    );
+  }
+
+  // The top app's minutes is used to scale the bars to 100%
+  const maxMinutes = topApps[0].totalMinutes;
+
+  return (
+    <section aria-label="App usage this week" style={{ marginBottom: '1.5rem' }}>
+      <div className="insights-section-header-row">
+        <h2 className="insights-section-title" style={{ margin: 0 }}>App usage this week</h2>
+        <button type="button" className="insights-inline-link" onClick={refresh}>
+          Refresh
+        </button>
+      </div>
+      <p className="insights-section-subtitle">Tap an app to create a block for it.</p>
+
+      <div className="top-apps-list">
+        {topApps.map((app) => {
+          const pct = maxMinutes > 0 ? Math.round((app.totalMinutes / maxMinutes) * 100) : 0;
+          return (
+            <button
+              key={app.packageName}
+              type="button"
+              className="top-apps-row"
+              onClick={() => onBlockApp(app)}
+              aria-label={`Block ${app.appName} — ${formatMinutes(app.totalMinutes)} this week`}
+            >
+              <span className="top-apps-name">{app.appName}</span>
+              <div className="top-apps-bar-wrap">
+                <div
+                  className="top-apps-bar"
+                  style={{ width: `${pct}%` }}
+                  role="presentation"
+                />
+              </div>
+              <span className="top-apps-time">{formatMinutes(app.totalMinutes)}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {topApps.length > 0 && (
+        <p className="top-apps-sync-note">
+          Synced from your device &middot; last 7 days
+        </p>
+      )}
+    </section>
+  );
+};
+
+interface InsightsViewProps {
+  onNavigateToBlocks?: (prefilledApp?: string) => void;
+}
+
+export const InsightsView: React.FC<InsightsViewProps> = ({ onNavigateToBlocks }) => {
   const [openIndex, setOpenIndex] = React.useState<number | null>(null);
   React.useEffect(() => {
     return journalStore.subscribe(() => {
@@ -90,6 +256,11 @@ export const InsightsView: React.FC = () => {
         </p>
       </header>
 
+
+      {/* ── Top Apps (native Android data) ───────────────────────────────── */}
+      <TopAppsCard
+        onBlockApp={(app) => onNavigateToBlocks?.(app.appName)}
+      />
 
       {/* ── Trigger patterns ──────────────────────────────────────────────── */}
       <section aria-label="Trigger patterns" style={{ marginBottom: '1.5rem' }}>
