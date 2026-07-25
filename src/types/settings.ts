@@ -1,5 +1,7 @@
 export type DetoxMode = 'gentle' | 'strict';
 
+export type DetoxIntensity = 'light' | 'moderate' | 'deep';
+
 export interface CustomMessage {
   id: string;           // crypto.randomUUID()
   text: string;         // typed text (may be empty if audio only)
@@ -20,6 +22,8 @@ export interface DetoxSettings {
   userName: string;
   /** Goals selected during onboarding, e.g. ['sleep', 'focus'] */
   goals: string[];
+  /** Detox intensity selected during onboarding */
+  detoxIntensity: DetoxIntensity;
 }
 
 export interface CulturalMessage {

@@ -18,8 +18,6 @@ const ROTATING_MESSAGES = [
   'Presence is the rarest gift you can give yourself.',
 ];
 
-const DID_YOU_KNOW_KEY = 'charito:did-you-know:dismissed';
-
 const DID_YOU_KNOW_FACTS = [
   'The average person unlocks their phone 96 times a day.',
   'Social media is engineered to be as addictive as slot machines.',
@@ -38,23 +36,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
   const [msgIndex, setMsgIndex] = React.useState(0);
   const [msgVisible, setMsgVisible] = React.useState(true);
 
-  // Did-you-know strip — once per session
+  // Did-you-know strip — random fact each session
   const [didYouKnowFact] = React.useState(() => {
     const idx = Math.floor(Math.random() * DID_YOU_KNOW_FACTS.length);
     return DID_YOU_KNOW_FACTS[idx];
   });
-  const [didYouKnowVisible, setDidYouKnowVisible] = React.useState(() => {
-    try {
-      return !sessionStorage.getItem(DID_YOU_KNOW_KEY);
-    } catch {
-      return true;
-    }
-  });
-
-  const dismissDidYouKnow = () => {
-    try { sessionStorage.setItem(DID_YOU_KNOW_KEY, '1'); } catch { /* ignore */ }
-    setDidYouKnowVisible(false);
-  };
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -117,21 +103,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
           </p>
         </div>
 
-        {/* Did you know strip — once per session */}
-        {didYouKnowVisible && (
-          <div className="did-you-know-strip">
-            <span className="did-you-know-label">Did you know?</span>
-            <span className="did-you-know-text">{didYouKnowFact}</span>
-            <button
-              type="button"
-              className="did-you-know-dismiss"
-              onClick={dismissDidYouKnow}
-              aria-label="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        {/* Did you know strip */}
+        <div className="did-you-know-strip">
+          <span className="did-you-know-label">Did you know?</span>
+          <span className="did-you-know-text">{didYouKnowFact}</span>
+        </div>
       </header>
 
       <section aria-label="Active session">

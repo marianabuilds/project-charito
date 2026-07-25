@@ -1,4 +1,4 @@
-import type { DetoxSettings } from '../types/settings';
+import type { DetoxSettings, DetoxIntensity } from '../types/settings';
 import { culturalPresets } from '../data/culturalPresets';
 
 const STORAGE_KEY = 'cultural-detox:settings:v1';
@@ -14,6 +14,7 @@ function getDefaultSettings(): DetoxSettings {
     customMessages: [],
     userName: '',
     goals: [],
+    detoxIntensity: 'moderate',
   };
 }
 
@@ -45,6 +46,9 @@ function loadSettings(): DetoxSettings {
       ...(Array.isArray(parsed.customMessages) ? { customMessages: parsed.customMessages } : {}),
       ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
       ...(Array.isArray(parsed.goals) ? { goals: parsed.goals as string[] } : {}),
+      ...(parsed.detoxIntensity === 'light' || parsed.detoxIntensity === 'moderate' || parsed.detoxIntensity === 'deep'
+        ? { detoxIntensity: parsed.detoxIntensity as DetoxIntensity }
+        : {}),
     };
   } catch {
     return getDefaultSettings();

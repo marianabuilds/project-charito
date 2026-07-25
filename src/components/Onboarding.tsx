@@ -1,6 +1,7 @@
 import React from 'react';
 import { LeafIcon } from './LeafIcon';
 import { settingsStore } from '../state/settingsStore';
+import type { DetoxIntensity } from '../types/settings';
 
 const ONBOARDING_KEY = 'charito:onboarded:v1';
 
@@ -45,13 +46,20 @@ function markOnboarded(): void {
   try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch {}
 }
 
-type OnboardingScreen = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+const DETOX_STYLES: { id: DetoxIntensity; emoji: string; label: string; description: string }[] = [
+  { id: 'light',    emoji: '🌱', label: 'Light',    description: 'Gentle nudges. Reminders, soft limits.' },
+  { id: 'moderate', emoji: '🌿', label: 'Moderate', description: 'Smart blocks, real limits. The default.' },
+  { id: 'deep',     emoji: '🌳', label: 'Deep',     description: 'Strict blocks. Accountability mode.' },
+];
+
+type OnboardingScreen = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 type MicStatus = 'idle' | 'granted' | 'denied';
 
 export const Onboarding: React.FC = () => {
   const [visible, setVisible] = React.useState(!hasOnboarded());
   const [screen, setScreen] = React.useState<OnboardingScreen>(1);
   const [selectedGoals, setSelectedGoals] = React.useState<string[]>([]);
+  const [detoxIntensity, setDetoxIntensity] = React.useState<DetoxIntensity>('moderate');
 
   // Live preview countdown
   const [previewSecs, setPreviewSecs] = React.useState(90);
@@ -79,6 +87,11 @@ export const Onboarding: React.FC = () => {
     setScreen(4);
   };
 
+  const handleDetoxStyleContinue = () => {
+    settingsStore.set({ detoxIntensity });
+    setScreen(5);
+  };
+
   const handleAllowNotifications = async () => {
     if (!('Notification' in window)) { setNotifStatus('unsupported'); return; }
     if (Notification.permission === 'granted') { setNotifStatus('granted'); return; }
@@ -100,9 +113,9 @@ export const Onboarding: React.FC = () => {
     }
   };
 
-  // Live preview timer — start when entering screen 5
+  // Live preview timer — start when entering screen 6
   React.useEffect(() => {
-    if (screen === 5) {
+    if (screen === 6) {
       setPreviewSecs(90);
       setPreviewRunning(true);
     } else {
@@ -254,10 +267,71 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* ── Screen 4 — How it works ───────────────────────────────────── */}
+        {/* ── Screen 4 — Your detox style ──────────────────────────────── */}
         {screen === 4 && (
           <div className="onboarding-screen">
             <button type="button" className="onboarding-back-btn" onClick={() => setScreen(3)}>&#8592;</button>
+            <h1 className="onboarding-heading">Your detox style</h1>
+            <p className="onboarding-subtext">
+              How strict do you want Charito to be? You can change this anytime in Settings.
+            </p>
+            <div className="onboarding-detox-style-grid">
+              {DETOX_STYLES.map((style) => {
+                const selected = detoxIntensity === style.id;
+                return (
+                  <button
+                    key={style.id}
+                    type="button"
+                    className={`onboarding-detox-card${selected ? ' onboarding-detox-card--selected' : ''}`}
+                    onClick={() => setDetoxIntensity(style.id)}
+                    aria-pressed={selected}
+                  >
+                    {selected && (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          top: '0.375rem',
+                          right: '0.5rem',
+                          width: '1.1rem',
+                          height: '1.1rem',
+                          borderRadius: '50%',
+                          background: 'var(--accent)',
+                          color: '#fff',
+                          fontSize: '0.65rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                      >
+                        &#10003;
+                      </span>
+                    )}
+                    <span className="onboarding-detox-card-emoji" aria-hidden="true">{style.emoji}</span>
+                    <div className="onboarding-detox-card-text">
+                      <span className="onboarding-goal-label">{style.label}</span>
+                      <span className="onboarding-goal-subtext">{style.description}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className="button button-primary onboarding-btn"
+              onClick={handleDetoxStyleContinue}
+            >
+              Continue &#8594;
+            </button>
+          </div>
+        )}
+
+        {/* ── Screen 5 — How it works ───────────────────────────────────── */}
+        {screen === 5 && (
+          <div className="onboarding-screen">
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(4)}>&#8592;</button>
             <h1 className="onboarding-heading">How Charito works</h1>
             <p className="onboarding-subtext">Simple. Honest. Built around your life.</p>
             <div className="onboarding-how-cards">
@@ -277,17 +351,17 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(5)}
+              onClick={() => setScreen(6)}
             >
               Got it &#8594;
             </button>
           </div>
         )}
 
-        {/* ── Screen 5 — Live preview ───────────────────────────────────── */}
-        {screen === 5 && (
+        {/* ── Screen 6 — Live preview ───────────────────────────────────── */}
+        {screen === 6 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(4)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(5)}>&#8592;</button>
             <h1 className="onboarding-heading">Here's what it looks like</h1>
             <p className="onboarding-subtext">When a detox block is active, you'll see this.</p>
 
@@ -312,17 +386,17 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(6)}
+              onClick={() => setScreen(7)}
             >
               Looks good &#8594;
             </button>
           </div>
         )}
 
-        {/* ── Screen 6 — Permissions ───────────────────────────────────── */}
-        {screen === 6 && (
+        {/* ── Screen 7 — Permissions ───────────────────────────────────── */}
+        {screen === 7 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(5)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(6)}>&#8592;</button>
             <h1 className="onboarding-heading">A few permissions</h1>
             <p className="onboarding-subtext">
               Charito works best with these enabled. You can change them anytime in Settings.
@@ -382,24 +456,24 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(7)}
+              onClick={() => setScreen(8)}
             >
               Continue &#8594;
             </button>
             <button
               type="button"
               className="onboarding-skip-link"
-              onClick={() => setScreen(7)}
+              onClick={() => setScreen(8)}
             >
               Skip for now
             </button>
           </div>
         )}
 
-        {/* ── Screen 7 — Done ──────────────────────────────────────────── */}
-        {screen === 7 && (
+        {/* ── Screen 8 — Done ──────────────────────────────────────────── */}
+        {screen === 8 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(6)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(7)}>&#8592;</button>
             <div className="onboarding-leaf-cluster" aria-hidden="true">
               <span className="onboarding-leaf-side"><LeafIcon size={28} className="onboarding-leaf" /></span>
               <LeafIcon size={52} className="onboarding-leaf onboarding-leaf--center" />
@@ -419,9 +493,9 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* ── Dot indicators — 7 dots ──────────────────────────────────── */}
+        {/* ── Dot indicators — 8 dots ──────────────────────────────────── */}
         <div className="onboarding-dots" aria-hidden="true">
-          {([1, 2, 3, 4, 5, 6, 7] as OnboardingScreen[]).map((s) => (
+          {([1, 2, 3, 4, 5, 6, 7, 8] as OnboardingScreen[]).map((s) => (
             <span
               key={s}
               className={`onboarding-dot${screen === s ? ' onboarding-dot--active' : ''}`}

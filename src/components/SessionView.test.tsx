@@ -13,6 +13,7 @@ vi.mock('../state/settingsStore', () => {
     customMessages: [],
     userName: '',
     goals: [],
+    detoxIntensity: 'moderate' as const,
   };
   return {
     settingsStore: {

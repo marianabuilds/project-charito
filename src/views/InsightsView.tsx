@@ -1,5 +1,6 @@
 import React from 'react';
 import { journalStore } from '../state/journalStore';
+import { settingsStore } from '../state/settingsStore';
 
 interface WhyItem {
   title: string;
@@ -53,7 +54,320 @@ function formatWeekMinutes(minutes: number): string {
 
 const TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'];
 
-export const InsightsView: React.FC = () => {
+// ─── Smart Recommendations ──────────────────────────────────────────────────
+
+interface MockAppStat {
+  name: string;
+  category: 'social' | 'productivity' | 'entertainment' | 'other';
+  dailyAvgMinutes: number;
+  launchCount: number;
+  lastUsedHour: number; // 0–23
+}
+
+const MOCK_APP_STATS: MockAppStat[] = [
+  { name: 'Instagram',  category: 'social',         dailyAvgMinutes: 87, launchCount: 23, lastUsedHour: 23 },
+  { name: 'TikTok',     category: 'social',         dailyAvgMinutes: 72, launchCount: 18, lastUsedHour: 22 },
+  { name: 'YouTube',    category: 'entertainment',  dailyAvgMinutes: 45, launchCount: 8,  lastUsedHour: 21 },
+  { name: 'Gmail',      category: 'productivity',   dailyAvgMinutes: 30, launchCount: 15, lastUsedHour: 18 },
+  { name: 'Twitter/X',  category: 'social',         dailyAvgMinutes: 28, launchCount: 12, lastUsedHour: 22 },
+  { name: 'Notion',     category: 'productivity',   dailyAvgMinutes: 22, launchCount: 6,  lastUsedHour: 16 },
+];
+
+type RecType = 'usage-limit' | 'set-hours' | 'launch-count' | 'duration';
+
+interface Recommendation {
+  id: string;
+  appName: string;
+  reason: string;
+  type: RecType;
+  defaultValue: number;
+  min: number;
+  max: number;
+  step: number;
+  dailyAvgMinutes: number;
+}
+
+function generateRecommendations(): Recommendation[] {
+  const intensity = settingsStore.get().detoxIntensity ?? 'moderate';
+
+  const SOCIAL_MULT  = 1.3;
+  const NIGHT_OWL_MULT = 1.2;
+
+  type ScoredApp = MockAppStat & { score: number; nightOwl: boolean };
+
+  const scored: ScoredApp[] = MOCK_APP_STATS.map((app) => {
+    const catMult  = app.category === 'social' ? SOCIAL_MULT : 1.0;
+    const nightOwl = app.lastUsedHour >= 22;
+    const nightMult = nightOwl ? NIGHT_OWL_MULT : 1.0;
+    const score = (app.dailyAvgMinutes + app.launchCount * 2) * catMult * nightMult;
+    return { ...app, score, nightOwl };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const topByTime = [...MOCK_APP_STATS].sort((a, b) => b.dailyAvgMinutes - a.dailyAvgMinutes)[0];
+
+  const timeThreshold   = intensity === 'deep' ? 20  : intensity === 'light' ? 60  : 40;
+  const launchThreshold = intensity === 'deep' ? 5   : intensity === 'light' ? 20  : 10;
+  const maxRecs         = intensity === 'deep' ? 5   : intensity === 'light' ? 2   : 4;
+
+  const recs: Recommendation[] = [];
+
+  for (const app of scored) {
+    if (recs.length >= maxRecs) break;
+
+    const qualifies =
+      app.dailyAvgMinutes > timeThreshold ||
+      app.launchCount > launchThreshold ||
+      app.name === topByTime.name;
+    if (!qualifies) continue;
+
+    let type: RecType;
+    let defaultValue: number;
+    let min: number;
+    let max: number;
+    let step: number;
+    let reason: string;
+
+    if (intensity === 'light') {
+      // Gentle: duration blocks only, no set-hours
+      type = 'duration';
+      defaultValue = 30;
+      min = 15;
+      max = 60;
+      step = 15;
+      reason = `You use ${app.name} ~${app.dailyAvgMinutes} min/day. A gentle cap can help.`;
+    } else if (intensity === 'deep') {
+      // Strict: prefer usage-limit and set-hours, lower thresholds
+      if (app.nightOwl && !recs.find((r) => r.type === 'set-hours')) {
+        type = 'set-hours';
+        defaultValue = 20; // 8 PM
+        min = 18;
+        max = 23;
+        step = 1;
+        reason = `${app.name} last used at ${app.lastUsedHour}:00 — flag as evening risk.`;
+      } else {
+        type = 'usage-limit';
+        const capBase = Math.round((app.dailyAvgMinutes * 0.5) / 15) * 15;
+        defaultValue = Math.max(15, capBase);
+        min = Math.max(15, Math.round((app.dailyAvgMinutes * 0.25) / 15) * 15);
+        max = app.dailyAvgMinutes;
+        step = 15;
+        reason = `Cut ${app.name} from ${app.dailyAvgMinutes} min/day — strict mode.`;
+      }
+    } else {
+      // Moderate: mix based on pattern
+      if (app.nightOwl && !recs.find((r) => r.type === 'set-hours')) {
+        type = 'set-hours';
+        defaultValue = 20;
+        min = 18;
+        max = 23;
+        step = 1;
+        reason = `${app.name} is frequently used after 10 PM.`;
+      } else if (app.launchCount > launchThreshold && !recs.find((r) => r.type === 'launch-count')) {
+        type = 'launch-count';
+        defaultValue = Math.max(5, Math.round(app.launchCount * 0.6));
+        min = 2;
+        max = app.launchCount;
+        step = 1;
+        reason = `${app.name} opened ${app.launchCount}× today — limit daily opens.`;
+      } else {
+        type = 'usage-limit';
+        const capBase = Math.round((app.dailyAvgMinutes * 0.6) / 15) * 15;
+        defaultValue = Math.max(15, capBase);
+        min = Math.max(15, Math.round((app.dailyAvgMinutes / 4) / 15) * 15);
+        max = app.dailyAvgMinutes;
+        step = 15;
+        reason = `${app.name} is your #${recs.length + 1} time drain at ${app.dailyAvgMinutes} min/day.`;
+      }
+    }
+
+    recs.push({
+      id: `${app.name}-${type}`,
+      appName: app.name,
+      reason,
+      type,
+      defaultValue,
+      min,
+      max,
+      step,
+      dailyAvgMinutes: app.dailyAvgMinutes,
+    });
+  }
+
+  return recs;
+}
+
+// ─── Smart Rec Card ──────────────────────────────────────────────────────────
+
+function formatHour(h: number): string {
+  if (h === 0)  return '12 AM';
+  if (h === 12) return '12 PM';
+  return h > 12 ? `${h - 12} PM` : `${h} AM`;
+}
+
+function formatPill(type: RecType, value: number): string {
+  switch (type) {
+    case 'usage-limit':  return `${value} min/day max`;
+    case 'set-hours':    return `No use after ${formatHour(value)}`;
+    case 'launch-count': return `Max ${value} opens/day`;
+    case 'duration':     return value >= 60 ? '1 hr focus block' : `${value} min focus block`;
+  }
+}
+
+interface SmartRecCardProps {
+  rec: Recommendation;
+  onAccept: (rec: Recommendation, value: number) => void;
+  onSkip: (id: string) => void;
+}
+
+const SmartRecCard: React.FC<SmartRecCardProps> = ({ rec, onAccept, onSkip }) => {
+  const [value, setValue] = React.useState(rec.defaultValue);
+
+  return (
+    <div className="smart-rec-card">
+      <div className="smart-rec-header">
+        <span className="smart-rec-app">{rec.appName}</span>
+        <span className="smart-rec-reason">{rec.reason}</span>
+      </div>
+
+      {/* Inline control */}
+      <div className="smart-rec-control">
+        {rec.type === 'usage-limit' && (
+          <>
+            <input
+              type="range"
+              className="quick-range"
+              min={rec.min}
+              max={rec.max}
+              step={rec.step}
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+            />
+            <div className="smart-rec-range-labels">
+              <span>{rec.min} min</span>
+              <span>{rec.max} min</span>
+            </div>
+          </>
+        )}
+
+        {rec.type === 'set-hours' && (
+          <div className="smart-rec-time-row">
+            <span className="smart-rec-time-label">No use after</span>
+            <select
+              className="smart-rec-select"
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+            >
+              {[18, 19, 20, 21, 22, 23].map((h) => (
+                <option key={h} value={h}>{formatHour(h)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {rec.type === 'launch-count' && (
+          <div className="smart-rec-stepper">
+            <button
+              type="button"
+              className="quick-stepper-btn"
+              onClick={() => setValue((v) => Math.max(rec.min, v - 1))}
+              disabled={value <= rec.min}
+            >
+              −
+            </button>
+            <span className="smart-rec-stepper-value">{value}</span>
+            <button
+              type="button"
+              className="quick-stepper-btn"
+              onClick={() => setValue((v) => Math.min(rec.max, v + 1))}
+              disabled={value >= rec.max}
+            >
+              +
+            </button>
+          </div>
+        )}
+
+        {rec.type === 'duration' && (
+          <div className="quick-duration-pills">
+            {[15, 30, 45, 60].map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`quick-duration-pill${value === d ? ' quick-duration-pill--active' : ''}`}
+                onClick={() => setValue(d)}
+              >
+                {d === 60 ? '1 hr' : `${d} min`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Live selection pill */}
+      <div className="smart-rec-selection-pill">{formatPill(rec.type, value)}</div>
+
+      {/* Actions */}
+      <div className="smart-rec-actions">
+        <button
+          type="button"
+          className="button button-primary smart-rec-accept-btn"
+          onClick={() => onAccept(rec, value)}
+        >
+          Create block →
+        </button>
+        <button
+          type="button"
+          className="smart-rec-skip"
+          onClick={() => onSkip(rec.id)}
+        >
+          Skip
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── SmartRecommendations section ───────────────────────────────────────────
+
+interface SmartRecommendationsProps {
+  onNavigateToBlocks: () => void;
+}
+
+const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({ onNavigateToBlocks }) => {
+  const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const recs = React.useMemo(() => generateRecommendations(), []);
+
+  const visible = recs.filter((r) => !dismissed.has(r.id));
+  if (visible.length === 0) return null;
+
+  const handleSkip = (id: string) => setDismissed((prev) => new Set([...prev, id]));
+  const handleAccept = (_rec: Recommendation, _value: number) => onNavigateToBlocks();
+
+  return (
+    <section aria-label="Smart block suggestions">
+      <h2 className="insights-section-title">Smart suggestions</h2>
+      <div className="smart-rec-list">
+        {visible.map((rec) => (
+          <SmartRecCard
+            key={rec.id}
+            rec={rec}
+            onAccept={handleAccept}
+            onSkip={handleSkip}
+          />
+        ))}
+      </div>
+    </section>
+  );
+};
+
+// ─── InsightsView ────────────────────────────────────────────────────────────
+
+interface InsightsViewProps {
+  onNavigateToBlocks: () => void;
+}
+
+export const InsightsView: React.FC<InsightsViewProps> = ({ onNavigateToBlocks }) => {
   const [openIndex, setOpenIndex] = React.useState<number | null>(null);
   React.useEffect(() => {
     return journalStore.subscribe(() => {
@@ -72,10 +386,7 @@ export const InsightsView: React.FC = () => {
   const triggerTally = journalStore.getWeeklyTriggerTally();
   const topTrigger = Object.entries(triggerTally).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
-  // Trigger patterns this week
   const hasTriggerData = weekEntries.length > 0;
-
-  // Monday banner
   const isMonday = new Date().getDay() === 1;
 
   void journalEntries;
@@ -90,6 +401,8 @@ export const InsightsView: React.FC = () => {
         </p>
       </header>
 
+      {/* ── Smart suggestions ─────────────────────────────────────────────── */}
+      <SmartRecommendations onNavigateToBlocks={onNavigateToBlocks} />
 
       {/* ── Trigger patterns ──────────────────────────────────────────────── */}
       <section aria-label="Trigger patterns" style={{ marginBottom: '1.5rem' }}>

@@ -13,6 +13,7 @@ let mockSettings: DetoxSettings = {
   customMessages: [],
   userName: '',
   goals: [],
+  detoxIntensity: 'moderate',
 };
 
 vi.mock('../state/settingsStore', () => ({
@@ -52,6 +53,7 @@ describe('useDetoxSession', () => {
       customMessages: [],
       userName: '',
       goals: [],
+      detoxIntensity: 'moderate',
     };
   });
 
