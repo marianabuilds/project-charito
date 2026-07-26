@@ -1,7 +1,13 @@
 import React from 'react';
 import { BlockCard } from '../components/BlockCard';
+import type { DetoxBlock } from '../state/blockStore';
 
-export const BlocksView: React.FC = () => {
+interface BlocksViewProps {
+  prefill?: Partial<DetoxBlock>;
+  onPrefillConsumed?: () => void;
+}
+
+export const BlocksView: React.FC<BlocksViewProps> = ({ prefill, onPrefillConsumed }) => {
   return (
     <div className="view">
       <header className="app-header">
@@ -10,7 +16,7 @@ export const BlocksView: React.FC = () => {
       </header>
 
       <section aria-label="Detox blocks">
-        <BlockCard />
+        <BlockCard prefill={prefill} onPrefillConsumed={onPrefillConsumed} />
       </section>
     </div>
   );

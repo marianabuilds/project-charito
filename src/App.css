@@ -1907,8 +1907,8 @@ input[type='range'] {
 
 /* ── Quick method 2×2 grid ───────────────────────────────────────────────── */
 .quick-method-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.625rem;
   margin-bottom: 1rem;
 }
@@ -1930,8 +1930,7 @@ input[type='range'] {
 .quick-method-card--active {
   border-color: var(--accent) !important;
   background: var(--accent-bg) !important;
-  /* expand naturally to hold config fields */
-  grid-column: span 2;
+  /* expands naturally within the flex column */
 }
 
 .quick-method-card-title {
@@ -3474,6 +3473,22 @@ input[type='range'] {
 }
 .smart-rec-skip:hover { color: var(--text-h); }
 
+/* Method badge pill inside smart-rec-card */
+.smart-rec-method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-m);
+  width: fit-content;
+  letter-spacing: 0.01em;
+}
+
 /* ── Onboarding detox style ──────────────────────────────────────────────── */
 .onboarding-detox-style-grid {
   display: flex;
@@ -3584,7 +3599,6 @@ input[type='range'] {
   font-size: 0.875rem;
   color: var(--text-h);
   line-height: 1.4;
-  flex: 1;
 }
 
 .home-smart-btn {
@@ -3603,4 +3617,20 @@ input[type='range'] {
 .home-smart-btn:hover {
   background: var(--accent);
   color: #fff;
+}
+
+/* Label + method pill stack inside home-smart-item */
+.home-smart-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.home-smart-method-pill {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-m);
+  letter-spacing: 0.01em;
 }

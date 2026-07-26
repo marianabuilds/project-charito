@@ -150,10 +150,48 @@ const EMPTY_FORM: FormState = {
   appsExpanded: false,
 };
 
-export const BlockCard: React.FC = () => {
+// ─── Prefill helper ───────────────────────────────────────────────────────────
+
+function prefillToForm(prefill: Partial<DetoxBlock>): FormState {
+  const apps =
+    prefill.selectedApps && prefill.selectedApps.length > 0
+      ? prefill.selectedApps
+      : EMPTY_FORM.selectedApps;
+  return {
+    ...EMPTY_FORM,
+    label: prefill.label ?? EMPTY_FORM.label,
+    blockingMethod: prefill.blockingMethod ?? EMPTY_FORM.blockingMethod,
+    durationMinutes: prefill.durationMinutes ?? EMPTY_FORM.durationMinutes,
+    setHoursStart: prefill.setHoursStart ?? EMPTY_FORM.setHoursStart,
+    setHoursEnd: prefill.setHoursEnd ?? EMPTY_FORM.setHoursEnd,
+    usageLimitMinutes: prefill.usageLimitMinutes ?? EMPTY_FORM.usageLimitMinutes,
+    launchCountMax: prefill.launchCountMax ?? EMPTY_FORM.launchCountMax,
+    days: prefill.days ?? EMPTY_FORM.days,
+    selectedApps: apps,
+  };
+}
+
+// ─── BlockCard ─────────────────────────────────────────────────────────────────
+
+interface BlockCardProps {
+  prefill?: Partial<DetoxBlock>;
+  onPrefillConsumed?: () => void;
+}
+
+export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed }) => {
   const [blocks, setBlocks] = React.useState<DetoxBlock[]>(blockStore.get().blocks);
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+
+  // Open form pre-populated whenever a new prefill arrives
+  React.useEffect(() => {
+    if (prefill) {
+      setForm(prefillToForm(prefill));
+      setShowForm(true);
+      onPrefillConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   // Preview a message via TTS
   const [previewingSpeech, setPreviewingSpeech] = React.useState(false);

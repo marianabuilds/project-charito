@@ -1,7 +1,8 @@
 import React from 'react';
 import { journalStore } from '../state/journalStore';
 import { generateRecommendations, formatHour, formatPill } from '../utils/recommendations';
-import type { Recommendation } from '../utils/recommendations';
+import type { Recommendation, RecType } from '../utils/recommendations';
+import type { DetoxBlock } from '../state/blockStore';
 
 interface WhyItem {
   title: string;
@@ -53,6 +54,48 @@ function formatWeekMinutes(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
+// ─── Method badge helpers ─────────────────────────────────────────────────────
+
+const METHOD_BADGE: Record<RecType, { icon: string; label: string }> = {
+  'duration':     { icon: '⏱', label: 'Duration' },
+  'set-hours':    { icon: '🕐', label: 'Set hours' },
+  'usage-limit':  { icon: '📊', label: 'Usage limit' },
+  'launch-count': { icon: '🚀', label: 'Launch count' },
+};
+
+function getMethodBadgeText(type: RecType, value: number): string {
+  const { icon, label } = METHOD_BADGE[type];
+  if (type === 'set-hours') {
+    return `${icon} ${label}  ·  ${formatHour(value)} – 7 AM`;
+  }
+  return `${icon} ${label}`;
+}
+
+// ─── Prefill builder ─────────────────────────────────────────────────────────
+
+function recToPrefill(rec: Recommendation, value: number): Partial<DetoxBlock> {
+  const base: Partial<DetoxBlock> = {
+    blockingMethod: rec.type,
+    selectedApps: [rec.appName],
+    label: rec.appName,
+  };
+  switch (rec.type) {
+    case 'usage-limit':
+      return { ...base, usageLimitMinutes: value };
+    case 'set-hours':
+      return {
+        ...base,
+        setHoursStart: `${String(value).padStart(2, '0')}:00`,
+        setHoursEnd: '07:00',
+      };
+    case 'launch-count':
+      return { ...base, launchCountMax: value };
+    case 'duration':
+    default:
+      return { ...base, durationMinutes: value };
+  }
+}
+
 // ─── Smart Rec Card ──────────────────────────────────────────────────────────
 
 interface SmartRecCardProps {
@@ -68,6 +111,9 @@ const SmartRecCard: React.FC<SmartRecCardProps> = ({ rec, onAccept, onSkip }) =>
     <div className="smart-rec-card">
       <div className="smart-rec-header">
         <span className="smart-rec-app">{rec.appName}</span>
+        <span className="smart-rec-method-badge">
+          {getMethodBadgeText(rec.type, value)}
+        </span>
         <span className="smart-rec-reason">{rec.reason}</span>
       </div>
 
@@ -171,7 +217,7 @@ const SmartRecCard: React.FC<SmartRecCardProps> = ({ rec, onAccept, onSkip }) =>
 // ─── SmartRecommendations section ───────────────────────────────────────────
 
 interface SmartRecommendationsProps {
-  onNavigateToBlocks: () => void;
+  onNavigateToBlocks: (prefill?: Partial<DetoxBlock>) => void;
 }
 
 const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({ onNavigateToBlocks }) => {
@@ -182,7 +228,8 @@ const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({ onNavigateT
   if (visible.length === 0) return null;
 
   const handleSkip = (id: string) => setDismissed((prev) => new Set([...prev, id]));
-  const handleAccept = (_rec: Recommendation, _value: number) => onNavigateToBlocks();
+  const handleAccept = (rec: Recommendation, value: number) =>
+    onNavigateToBlocks(recToPrefill(rec, value));
 
   return (
     <section aria-label="Smart block suggestions">
@@ -204,7 +251,7 @@ const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({ onNavigateT
 // ─── InsightsView ────────────────────────────────────────────────────────────
 
 interface InsightsViewProps {
-  onNavigateToBlocks: () => void;
+  onNavigateToBlocks: (prefill?: Partial<DetoxBlock>) => void;
 }
 
 export const InsightsView: React.FC<InsightsViewProps> = ({ onNavigateToBlocks }) => {

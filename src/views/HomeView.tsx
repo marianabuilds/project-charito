@@ -28,6 +28,13 @@ function getHomeSuggestionLabel(rec: Recommendation): string {
   return `Focus block for ${rec.appName}`;
 }
 
+const HOME_METHOD_LABELS: Record<Recommendation['type'], string> = {
+  'duration': '⏱ Duration',
+  'set-hours': '🕐 Set hours',
+  'usage-limit': '📊 Usage limit',
+  'launch-count': '🚀 Launch count',
+};
+
 // ─── Rotating messages ────────────────────────────────────────────────────
 
 const ROTATING_MESSAGES = [
@@ -143,10 +150,15 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
           </p>
           {homeSuggestions.map((rec) => (
             <div key={rec.id} className="home-smart-item">
-              <span className="home-smart-label">
-                {getHomeSuggestionEmoji(rec.type, rec.appName)}{' '}
-                {getHomeSuggestionLabel(rec)}
-              </span>
+              <div className="home-smart-label-group">
+                <span className="home-smart-label">
+                  {getHomeSuggestionEmoji(rec.type, rec.appName)}{' '}
+                  {getHomeSuggestionLabel(rec)}
+                </span>
+                <span className="home-smart-method-pill">
+                  {HOME_METHOD_LABELS[rec.type]}
+                </span>
+              </div>
               <button
                 type="button"
                 className="home-smart-btn"
