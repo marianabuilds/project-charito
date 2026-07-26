@@ -3,6 +3,7 @@ import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import type { DetoxSettings } from '../types/settings';
+import { getBodyCueMessage } from '../utils/bodyCues';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'completed';
 
@@ -40,6 +41,12 @@ export function useDetoxSession() {
       );
       const msg = preset?.messages.find((m) => m.id === settings.selectedMessageId);
       if (msg) return msg.text;
+    }
+
+    // Body-cue messages surface ~30% of the time during evening/morning windows
+    const bodyCue = getBodyCueMessage();
+    if (bodyCue && Math.random() < 0.3) {
+      return bodyCue;
     }
 
     // Random from all messages in this culture

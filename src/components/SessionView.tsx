@@ -6,6 +6,8 @@ import { StrictOverlay } from './StrictOverlay';
 import { journalStore } from '../state/journalStore';
 import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
+import { rewardsStore } from '../state/rewardsStore';
+import { streakStore } from '../state/streakStore';
 
 const JOURNAL_TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'] as const;
 
@@ -116,8 +118,38 @@ export const SessionView: React.FC = () => {
   }, [quickSelectedApps, quickAllAppsSelected]);
 
   React.useEffect(() => {
-    if (status === 'completed' && isStrict) setOverlayVisible(true);
+    if (status === 'completed') {
+      // Award rewards points for completing a block
+      rewardsStore.recordBlockCompleted();
+      if (isStrict) setOverlayVisible(true);
+    }
   }, [status, isStrict]);
+
+  // ── Celebration + streak affirmation on block completion ─────────────────
+  const prevStatusRef = React.useRef<string>('idle');
+  React.useEffect(() => {
+    if (prevStatusRef.current !== 'completed' && status === 'completed') {
+      const minutes = Math.max(1, Math.round(elapsedSeconds / 60));
+      const minLabel = minutes === 1 ? 'minute' : 'minutes';
+
+      // Weekly reclaim total (journal entries this week + current block)
+      const weekMinutes = journalStore.getThisWeek().reduce((sum, e) => sum + e.minutesReclaimed, 0) + minutes;
+      const weekHours = (weekMinutes / 60).toFixed(1);
+
+      const celebrationMsg = weekMinutes > minutes
+        ? `✨ Block complete! You just reclaimed ${minutes} ${minLabel}. You've reclaimed ${weekHours} hours this week.`
+        : `✨ Block complete! You just reclaimed ${minutes} ${minLabel}.`;
+
+      toastStore.show(celebrationMsg);
+
+      // Streak affirmation — slight delay so toasts don't stack immediately
+      const affirmation = streakStore.recordCompletion();
+      if (affirmation) {
+        window.setTimeout(() => toastStore.show(affirmation), 4200);
+      }
+    }
+    prevStatusRef.current = status;
+  }, [status, elapsedSeconds]);
 
   React.useEffect(() => {
     if (status === 'idle') {
@@ -410,6 +442,10 @@ export const SessionView: React.FC = () => {
   // ── Completed state ─────────────────────────────────────────────────────
   if (status === 'completed' && !overlayVisible) {
     const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    const weekMinutes = journalStore.getThisWeek().reduce((sum, e) => sum + e.minutesReclaimed, 0) + elapsedMinutes;
+    const weekHours = (weekMinutes / 60).toFixed(1);
+    const hasWeeklyData = weekMinutes > elapsedMinutes;
+
     return (
       <div className="session-complete-card card">
         <div className="session-complete-icon" aria-hidden="true">
@@ -418,9 +454,12 @@ export const SessionView: React.FC = () => {
             <path d="M13 20l5 5 9-10" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <p className="session-complete-title">Well done.</p>
+        <p className="session-complete-title">✨ Block complete.</p>
         <p className="session-complete-body">
-          You reclaimed {elapsedMinutes} {elapsedMinutes === 1 ? 'minute' : 'minutes'}.
+          You just reclaimed {elapsedMinutes} {elapsedMinutes === 1 ? 'minute' : 'minutes'}.
+          {hasWeeklyData && (
+            <> You&rsquo;ve reclaimed <strong>{weekHours} hours</strong> this week.</>
+          )}
         </p>
         {currentMessageText && (
           <p className="session-complete-quote"><em>"{currentMessageText}"</em></p>

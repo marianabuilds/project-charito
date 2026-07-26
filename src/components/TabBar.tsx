@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ViewId = 'home' | 'blocks' | 'insights' | 'settings';
+export type ViewId = 'home' | 'blocks' | 'insights' | 'settings' | 'rewards';
 
 interface TabBarProps {
   active: ViewId;
@@ -78,6 +78,24 @@ export const TabBar: React.FC<TabBarProps> = ({ active, onChange }) => {
           />
         </svg>
         Settings
+      </button>
+
+      <button
+        type="button"
+        className={`tab-btn${active === 'rewards' ? ' tab-btn--active' : ''}`}
+        onClick={() => onChange('rewards')}
+        aria-current={active === 'rewards' ? 'page' : undefined}
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 2l2.4 4.8 5.3.8-3.85 3.75.91 5.3L12 14.27l-4.76 2.58.91-5.3L4.3 7.6l5.3-.8L12 2z"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Rewards
       </button>
     </nav>
   );

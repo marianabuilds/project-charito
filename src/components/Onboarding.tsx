@@ -31,6 +31,21 @@ const HOW_IT_WORKS = [
     body: "Charito speaks to you in your culture's language. Gentle. Personal. Real.",
   },
   {
+    emoji: '🌙',
+    title: 'Body-aware reminders',
+    body: 'Charito notices the time and nudges you accordingly \u2014 so you wind down when your body needs it most.',
+  },
+  {
+    emoji: '⏳',
+    title: 'Reclaim your time',
+    body: 'Every completed block adds up. Charito shows you exactly how many hours you got back \u2014 for sleep, focus, and the people you love.',
+  },
+  {
+    emoji: '🤖',
+    title: 'Smart recommendations',
+    body: 'Charito learns your habits and suggests personalized blocks \u2014 so you spend less time deciding and more time living.',
+  },
+  {
     emoji: '💸',
     title: '$1 accountability rule',
     body: "Break your schedule? A $1 charge goes toward the app \u2014 a light nudge, not a punishment.",
@@ -305,6 +320,17 @@ export const Onboarding: React.FC = () => {
                 </div>
                 <p className="onboarding-preview-msg">
                   <em>"Oye, baja el tel&eacute;fono. El momento te espera."</em>
+                </p>
+              </div>
+            </div>
+
+            {/* Body-cue feature callout */}
+            <div className="onboarding-how-card" style={{ marginTop: '1rem', textAlign: 'left' }}>
+              <span className="onboarding-how-emoji" aria-hidden="true">🌙</span>
+              <div>
+                <p className="onboarding-how-title">Body-aware reminders</p>
+                <p className="onboarding-how-body">
+                  Charito notices the time and nudges you accordingly — so you wind down when your body needs it most.
                 </p>
               </div>
             </div>

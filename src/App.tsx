@@ -19,6 +19,9 @@ const SettingsView = React.lazy(() =>
 const InsightsView = React.lazy(() =>
   import('./views/InsightsView').then((m) => ({ default: m.InsightsView })),
 );
+const RewardsView = React.lazy(() =>
+  import('./views/RewardsView').then((m) => ({ default: m.RewardsView })),
+);
 
 export const App: React.FC = () => {
   const [view, setView] = React.useState<ViewId>('home');
@@ -33,6 +36,7 @@ export const App: React.FC = () => {
             <InsightsView onNavigateToBlocks={() => setView('blocks')} />
           )}
           {view === 'settings' && <SettingsView />}
+          {view === 'rewards' && <RewardsView />}
         </React.Suspense>
         <TabBar active={view} onChange={setView} />
         <Onboarding />

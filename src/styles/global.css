@@ -159,3 +159,278 @@
   text-decoration: underline;
 }
 
+/* ── Smart suggestions home header ──────────────────────────────────────── */
+.home-recs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.home-recs-ai-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  background: var(--gold-bg, rgba(196,154,60,0.1));
+  border: 1px solid rgba(196,154,60,0.28);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+/* Auto-scheduled inline tag */
+.smart-rec-auto-tag {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* ── Rewards view ─────────────────────────────────────────────────────────── */
+
+/* Points summary card */
+.rewards-points-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rewards-points-display {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.rewards-points-number {
+  font-family: var(--font-heading);
+  font-size: clamp(2.75rem, 12vw, 3.75rem);
+  font-weight: 300;
+  color: var(--text-h);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rewards-points-unit {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.rewards-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.rewards-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.rewards-stat-divider {
+  width: 1px;
+  height: 2.5rem;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.rewards-stat-value {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-h);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rewards-stat-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-m);
+}
+
+.rewards-next-milestone {
+  font-size: 0.875rem;
+  color: var(--text-m);
+  margin: 0;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.rewards-next-milestone--complete {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.rewards-earn-hint {
+  font-size: 0.75rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  padding-top: 0.625rem;
+}
+
+/* Milestone badges */
+.rewards-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rewards-milestone-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.125rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: opacity 0.2s;
+}
+
+.rewards-milestone-card--locked {
+  opacity: 0.45;
+}
+
+.rewards-milestone-card--unlocked {
+  border-color: var(--accent-border, rgba(90,122,90,0.35));
+  background: var(--accent-bg);
+}
+
+.rewards-milestone-emoji {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rewards-milestone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rewards-milestone-badge {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.rewards-milestone-desc {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.rewards-milestone-streak {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0.25rem 0 0;
+}
+
+.rewards-milestone-card--locked .rewards-milestone-streak {
+  color: var(--text-m);
+}
+
+/* Reward offers */
+.rewards-offers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rewards-offer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.125rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.rewards-offer-card:last-child {
+  border-bottom: none;
+}
+
+.rewards-offer-card--community {
+  background: var(--surface-2, #f7f3ed);
+}
+
+.rewards-offer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.rewards-offer-pts {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-m);
+}
+
+.rewards-offer-pts--available {
+  color: var(--accent);
+}
+
+.rewards-offer-pts--free {
+  color: var(--gold);
+}
+
+.rewards-offer-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.rewards-offer-desc {
+  font-size: 0.8125rem;
+  color: var(--text-m);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.rewards-redeem-btn {
+  flex-shrink: 0;
+  padding: 0.4rem 0.875rem;
+  border: 1px solid var(--accent-border, rgba(90,122,90,0.35));
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.rewards-redeem-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
