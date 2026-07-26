@@ -13,6 +13,11 @@ export interface StartBlockingOptions {
    * Pass 0 (or omit) for no expiry — the block stays until stopBlocking() is called.
    */
   blockEndEpochMs?: number;
+  /**
+   * Optional reminder text spoken when a blocked app is opened (native TTS)
+   * and stored for the overlay.
+   */
+  reminderText?: string;
 }
 
 export interface HasAccessibilityPermissionResult {

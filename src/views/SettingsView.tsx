@@ -4,6 +4,7 @@ import { ModeToggle } from '../components/ModeToggle';
 import { MessageSelector } from '../components/MessageSelector';
 import { planStore } from '../state/planStore';
 import type { Plan } from '../state/planStore';
+import { settingsStore } from '../state/settingsStore';
 
 const StatsCard: React.FC = () => (
   <div className="stats-card card">
@@ -326,7 +327,17 @@ const BillingSection: React.FC = () => {
   );
 };
 
+const PRE_BLOCK_OPTIONS = [0, 5, 10, 15] as const;
+
 export const SettingsView: React.FC = () => {
+  const [preBlockMins, setPreBlockMins] = React.useState(
+    () => settingsStore.get().preBlockReminderMinutes ?? 10,
+  );
+
+  React.useEffect(() => {
+    return settingsStore.subscribe((s) => setPreBlockMins(s.preBlockReminderMinutes ?? 10));
+  }, []);
+
   const handleRevisitOnboarding = () => {
     try {
       localStorage.removeItem('charito:onboarded:v1');
@@ -352,6 +363,31 @@ export const SettingsView: React.FC = () => {
         <CultureSelector />
         <ModeToggle />
         <MessageSelector />
+
+        <div className="settings-field" style={{ marginTop: '1.25rem' }}>
+          <label className="block-form-label" htmlFor="pre-block-reminder">
+            Pre-block notification
+          </label>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.25rem 0 0.5rem' }}>
+            Notify you before a scheduled block starts.
+          </p>
+          <select
+            id="pre-block-reminder"
+            className="select"
+            value={preBlockMins}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setPreBlockMins(v);
+              settingsStore.set({ preBlockReminderMinutes: v });
+            }}
+          >
+            {PRE_BLOCK_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? 'Off' : `${m} minutes before`}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <PermissionsSection />

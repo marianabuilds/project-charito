@@ -8,7 +8,9 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -28,6 +30,23 @@ public class AppBlockerService extends AccessibilityService {
     public static final String PREFS_NAME  = "charito_prefs";
     public static final String KEY_BLOCKED = "blocked_packages";
     public static final String KEY_BLOCK_END_MS = "block_end_epoch_ms";
+    public static final String KEY_REMINDER_TEXT = "reminder_text";
+
+    /** Dialer / phone packages — never blocked so emergency calls always work. */
+    private static final List<String> PHONE_PACKAGES = Arrays.asList(
+            "com.android.dialer",
+            "com.google.android.dialer",
+            "com.samsung.android.dialer",
+            "com.samsung.android.incallui",
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.google.android.apps.dialer",
+            "com.oneplus.dialer",
+            "com.miui.dialer",
+            "com.huawei.android.dialer",
+            "com.coloros.dialer",
+            "com.truecaller"
+    );
 
     /** Package that is currently showing our overlay (avoid re-launching it). */
     private String lastBlockedPackage = null;
@@ -39,6 +58,12 @@ public class AppBlockerService extends AccessibilityService {
         CharSequence pkgSeq = event.getPackageName();
         if (pkgSeq == null) return;
         String pkg = pkgSeq.toString();
+
+        // Never intercept Phone / Dialer
+        if (PHONE_PACKAGES.contains(pkg)) {
+            lastBlockedPackage = null;
+            return;
+        }
 
         // Ignore our own app and system UI
         if (pkg.equals(getPackageName())) {
@@ -78,10 +103,13 @@ public class AppBlockerService extends AccessibilityService {
                     .toString();
         } catch (Exception ignored) { /* fall back to package name */ }
 
+        String reminderText = prefs.getString(KEY_REMINDER_TEXT, "");
+
         Intent overlay = new Intent(this, BlockedOverlayActivity.class);
         overlay.putExtra(BlockedOverlayActivity.EXTRA_APP_NAME, appName);
         overlay.putExtra(BlockedOverlayActivity.EXTRA_PACKAGE_NAME, pkg);
         overlay.putExtra(BlockedOverlayActivity.EXTRA_BLOCK_END_MS, blockEndMs);
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_REMINDER_TEXT, reminderText);
         overlay.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);

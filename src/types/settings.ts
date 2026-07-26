@@ -20,6 +20,11 @@ export interface DetoxSettings {
   userName: string;
   /** Goals selected during onboarding, e.g. ['sleep', 'focus'] */
   goals: string[];
+  /**
+   * Minutes before a scheduled set-hours block starts to show a reminder notification.
+   * Default 10.
+   */
+  preBlockReminderMinutes: number;
 }
 
 export interface CulturalMessage {

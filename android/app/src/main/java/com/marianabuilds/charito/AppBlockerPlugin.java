@@ -16,15 +16,17 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 /**
  * AppBlockerPlugin — Capacitor bridge for Charito's app-blocking feature.
  *
  * JavaScript interface:
- *   startBlocking({ packages: string[], blockEndEpochMs: number }) → void
+ *   startBlocking({ packages: string[], blockEndEpochMs: number, reminderText?: string }) → void
  *   stopBlocking()                                                  → void
  *   hasAccessibilityPermission()                                    → { granted: boolean }
  *   openAccessibilitySettings()                                     → void
@@ -37,6 +39,22 @@ import java.util.Set;
  */
 @CapacitorPlugin(name = "AppBlocker")
 public class AppBlockerPlugin extends Plugin {
+
+    /** Dialer / phone packages that must never be blocked. */
+    private static final List<String> PHONE_PACKAGES = Arrays.asList(
+            "com.android.dialer",
+            "com.google.android.dialer",
+            "com.samsung.android.dialer",
+            "com.samsung.android.incallui",
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.google.android.apps.dialer",
+            "com.oneplus.dialer",
+            "com.miui.dialer",
+            "com.huawei.android.dialer",
+            "com.coloros.dialer",
+            "com.truecaller"
+    );
 
     private BroadcastReceiver breakBlockReceiver;
 
@@ -82,6 +100,7 @@ public class AppBlockerPlugin extends Plugin {
     public void startBlocking(PluginCall call) {
         JSArray packages = call.getArray("packages");
         long blockEndMs  = call.getLong("blockEndEpochMs", 0L);
+        String reminderText = call.getString("reminderText", "");
 
         if (packages == null || packages.length() == 0) {
             call.reject("packages array is required and must not be empty");
@@ -92,10 +111,17 @@ public class AppBlockerPlugin extends Plugin {
         try {
             for (int i = 0; i < packages.length(); i++) {
                 String pkg = packages.getString(i);
-                if (pkg != null && !pkg.isEmpty()) pkgSet.add(pkg);
+                if (pkg != null && !pkg.isEmpty() && !PHONE_PACKAGES.contains(pkg)) {
+                    pkgSet.add(pkg);
+                }
             }
         } catch (Exception e) {
             call.reject("Failed to parse packages: " + e.getMessage());
+            return;
+        }
+
+        if (pkgSet.isEmpty()) {
+            call.reject("No blockable packages after excluding Phone/Dialer");
             return;
         }
 
@@ -104,6 +130,8 @@ public class AppBlockerPlugin extends Plugin {
         prefs.edit()
                 .putStringSet(AppBlockerService.KEY_BLOCKED, pkgSet)
                 .putLong(AppBlockerService.KEY_BLOCK_END_MS, blockEndMs)
+                .putString(AppBlockerService.KEY_REMINDER_TEXT,
+                        reminderText != null ? reminderText : "")
                 .apply();
 
         call.resolve();
@@ -119,6 +147,7 @@ public class AppBlockerPlugin extends Plugin {
                 .edit()
                 .remove(AppBlockerService.KEY_BLOCKED)
                 .remove(AppBlockerService.KEY_BLOCK_END_MS)
+                .remove(AppBlockerService.KEY_REMINDER_TEXT)
                 .apply();
         call.resolve();
     }

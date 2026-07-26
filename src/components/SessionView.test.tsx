@@ -13,6 +13,7 @@ vi.mock('../state/settingsStore', () => {
     customMessages: [],
     userName: '',
     goals: [],
+    preBlockReminderMinutes: 10,
   };
   return {
     settingsStore: {

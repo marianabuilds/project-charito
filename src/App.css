@@ -2104,18 +2104,84 @@ input[type='range'] {
   flex-shrink: 0;
 }
 
+.home-recs-empty {
+  padding: 1rem 1.125rem;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.home-recs-empty-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.home-recs-empty-body {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-m);
+}
+
 .home-subtitle-inline {
   margin: 0;
   line-height: 1.45;
 }
 
-/* ── Quick method 2×2 grid ───────────────────────────────────────────────── */
+/* ── Quick method vertical stack ─────────────────────────────────────────── */
 .quick-method-grid {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
   padding: 0 1.375rem;
   margin-bottom: 1rem;
+}
+
+.quick-method-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.quick-method-block--active {
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-bg);
+  overflow: hidden;
+}
+
+.quick-method-block--active .quick-method-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.quick-method-inline-panel {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+.quick-reminder-row--inline,
+.quick-apps-row--inline {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.quick-reminder-helper {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text-m);
+}
+
+.quick-start-wrap {
+  padding: 0.75rem;
 }
 
 .quick-method-card {
@@ -2129,14 +2195,13 @@ input[type='range'] {
   cursor: pointer;
   text-align: left;
   font-family: var(--font-body);
+  width: 100%;
   transition: border-color 0.15s, background 0.15s;
 }
 .quick-method-card:hover { border-color: var(--accent-border); background: var(--accent-bg); }
 .quick-method-card--active {
-  border-color: var(--accent) !important;
-  background: var(--accent-bg) !important;
-  /* expand naturally to hold config fields */
-  grid-column: span 2;
+  border-color: transparent;
+  background: transparent;
 }
 
 .quick-method-card-title {

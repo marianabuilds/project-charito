@@ -6,11 +6,14 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.speech.tts.TextToSpeech;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+
+import java.util.Locale;
 
 /**
  * BlockedOverlayActivity — fullscreen "you're blocked" screen.
@@ -28,11 +31,13 @@ public class BlockedOverlayActivity extends Activity {
     public static final String EXTRA_APP_NAME      = "app_name";
     public static final String EXTRA_PACKAGE_NAME  = "package_name";
     public static final String EXTRA_BLOCK_END_MS  = "block_end_epoch_ms";
+    public static final String EXTRA_REMINDER_TEXT = "reminder_text";
 
     /** Broadcast action — web layer listens via AppBlockerPlugin to trigger the $1 charge. */
     public static final String ACTION_BREAK_BLOCK  = "com.marianabuilds.charito.BREAK_BLOCK";
 
     private CountDownTimer countDownTimer;
+    private TextToSpeech tts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +55,20 @@ public class BlockedOverlayActivity extends Activity {
         String appName    = getIntent().getStringExtra(EXTRA_APP_NAME);
         String pkgName    = getIntent().getStringExtra(EXTRA_PACKAGE_NAME);
         long   blockEndMs = getIntent().getLongExtra(EXTRA_BLOCK_END_MS, 0L);
+        String reminderText = getIntent().getStringExtra(EXTRA_REMINDER_TEXT);
 
         if (appName == null) appName = "This app";
+
+        // Speak the audio reminder when the user tries to open a blocked app
+        final String speakText = (reminderText != null && !reminderText.isEmpty())
+                ? reminderText
+                : "You set this block intentionally. This moment is yours.";
+        tts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS && tts != null) {
+                tts.setLanguage(Locale.getDefault());
+                tts.speak(speakText, TextToSpeech.QUEUE_FLUSH, null, "charito_block");
+            }
+        });
 
         // ── Build UI programmatically ──────────────────────────────────────────
 
@@ -160,6 +177,7 @@ public class BlockedOverlayActivity extends Activity {
                     .edit()
                     .remove(AppBlockerService.KEY_BLOCKED)
                     .remove(AppBlockerService.KEY_BLOCK_END_MS)
+                    .remove(AppBlockerService.KEY_REMINDER_TEXT)
                     .apply();
 
             finish();
@@ -178,6 +196,11 @@ public class BlockedOverlayActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (countDownTimer != null) countDownTimer.cancel();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+            tts = null;
+        }
         super.onDestroy();
     }
 

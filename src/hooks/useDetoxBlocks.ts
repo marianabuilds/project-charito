@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { blockStore } from '../state/blockStore';
 import type { DetoxBlock, BlockState } from '../state/blockStore';
+import { settingsStore } from '../state/settingsStore';
+import { culturalPresets } from '../data/culturalPresets';
+import { speak } from '../services/audioEngine';
+import { AppBlocker } from '../plugins/AppBlocker';
+import { APP_PACKAGE_MAP, resolvePackages } from '../utils/appPackages';
+import {
+  isWithinSetHoursWindow,
+  showLocalNotification,
+  subtractMinutesHHMM,
+} from '../utils/notifications';
+
+const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 /** Returns current wall-clock time as "HH:MM" */
 function currentHHMM(): string {
@@ -16,7 +29,7 @@ function todayKey(): string {
 
 /** Haversine distance between two lat/lng points in meters */
 export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -26,6 +39,54 @@ export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function resolveBlockMessage(block: DetoxBlock): string | null {
+  const settings = settingsStore.get();
+  if (block.messageId) {
+    const customMsg = settings.customMessages.find((m) => m.id === block.messageId);
+    if (customMsg) return customMsg.text || null;
+    if (block.messageId === 'custom') return block.customMessage || null;
+    const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
+    return preset?.messages.find((m) => m.id === block.messageId)?.text ?? null;
+  }
+  const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
+  if (preset && preset.messages.length > 0) {
+    return preset.messages[Math.floor(Math.random() * preset.messages.length)].text;
+  }
+  return null;
+}
+
+function blockEndEpochMs(block: DetoxBlock): number {
+  if (block.blockingMethod === 'set-hours' && block.setHoursEnd) {
+    const now = new Date();
+    const [eh, em] = block.setHoursEnd.split(':').map(Number);
+    const end = new Date(now);
+    end.setHours(eh, em, 0, 0);
+    if (block.setHoursStart && block.setHoursEnd < block.setHoursStart) {
+      // Overnight — end is tomorrow if we're past start
+      if (currentHHMM() >= block.setHoursStart) {
+        end.setDate(end.getDate() + 1);
+      }
+    } else if (end.getTime() <= now.getTime()) {
+      end.setDate(end.getDate() + 1);
+    }
+    return end.getTime();
+  }
+  return Date.now() + Math.max(1, block.durationMinutes) * 60 * 1000;
+}
+
+async function startBlockAppBlocking(block: DetoxBlock, reminderText: string | null): Promise<void> {
+  if (!isAndroid) return;
+  const pkgs = resolvePackages(
+    block.selectedApps.length > 0 ? block.selectedApps : Object.keys(APP_PACKAGE_MAP),
+  );
+  if (pkgs.length === 0) return;
+  await AppBlocker.startBlocking({
+    packages: pkgs,
+    blockEndEpochMs: blockEndEpochMs(block),
+    reminderText: reminderText ?? undefined,
+  });
+}
+
 interface UseDetoxBlocksResult {
   blocks: DetoxBlock[];
   snooze: (blockId: string) => void;
@@ -33,17 +94,14 @@ interface UseDetoxBlocksResult {
 
 /**
  * Subscribes to blockStore and polls every 30 s.
- * Calls `onTrigger(block)` once per session per block when:
- *   - block.active is true
- *   - current day is in block.days (or block.days is empty = today only)
- *   - for "set-hours" blocks: current "HH:MM" is within [setHoursStart, setHoursEnd]
- *   - other methods are not auto-triggered (require manual start)
- * Uses a runtime Set keyed by `${block.id}:${YYYY-MM-DD}` to avoid duplicate triggers.
- * One-shot blocks (empty days) are removed after firing.
+ * Calls `onTrigger(block)` once per session per block when active windows match.
+ * Also: pre-block notifications, AppBlocker start/stop for scheduled set-hours blocks.
  */
 export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetoxBlocksResult {
   const [blockState, setBlockState] = useState<BlockState>(blockStore.get());
   const firedRef = useRef<Set<string>>(new Set());
+  const preNotifiedRef = useRef<Set<string>>(new Set());
+  const activeBlockingIdRef = useRef<string | null>(null);
   const onTriggerRef = useRef(onTrigger);
 
   useEffect(() => {
@@ -61,8 +119,10 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
       const dayOfWeek = now.getDay();
       const today = todayKey();
       const state = blockStore.get();
+      const preMins = settingsStore.get().preBlockReminderMinutes ?? 10;
       let changed = false;
       const remaining: DetoxBlock[] = [];
+      let anySetHoursActive = false;
 
       for (const block of state.blocks) {
         if (!block.active) {
@@ -70,7 +130,6 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
           continue;
         }
 
-        // Only "set-hours" and "location" blocks are auto-triggered
         if (block.blockingMethod !== 'set-hours' && block.blockingMethod !== 'location') {
           remaining.push(block);
           continue;
@@ -81,23 +140,62 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
           block.days.length === 0 ? true : block.days.includes(dayOfWeek);
 
         if (block.blockingMethod === 'set-hours') {
-          const inWindow =
-            block.setHoursStart.length > 0 &&
-            block.setHoursEnd.length > 0 &&
-            block.setHoursStart <= hhmm &&
-            hhmm <= block.setHoursEnd;
+          // Pre-block notification X minutes before start
+          if (
+            matchesDay &&
+            block.setHoursStart &&
+            preMins > 0
+          ) {
+            const notifyAt = subtractMinutesHHMM(block.setHoursStart, preMins);
+            const preKey = `pre:${block.id}:${today}`;
+            if (hhmm === notifyAt && !preNotifiedRef.current.has(preKey)) {
+              preNotifiedRef.current.add(preKey);
+              const label = block.label || 'Detox block';
+              void showLocalNotification(
+                'Block starting soon',
+                `"${label}" begins in ${preMins} minute${preMins === 1 ? '' : 's'}.`,
+              );
+            }
+          }
 
-          if (matchesDay && inWindow && !firedRef.current.has(firedKey)) {
-            firedRef.current.add(firedKey);
-            onTriggerRef.current(block);
-            if (block.days.length === 0) {
-              changed = true;
-              continue;
+          const inWindow =
+            matchesDay &&
+            isWithinSetHoursWindow(hhmm, block.setHoursStart, block.setHoursEnd);
+
+          if (inWindow) {
+            anySetHoursActive = true;
+            if (!firedRef.current.has(firedKey)) {
+              firedRef.current.add(firedKey);
+              const messageText = resolveBlockMessage(block);
+              // Audio first, then AppBlocker
+              const afterAudio = () => {
+                void startBlockAppBlocking(block, messageText).catch(() => { /* ignore */ });
+                activeBlockingIdRef.current = block.id;
+              };
+              if (messageText) {
+                void speak(messageText, settingsStore.get().languageCode).finally(afterAudio);
+              } else {
+                afterAudio();
+              }
+              onTriggerRef.current(block);
+              if (block.days.length === 0) {
+                changed = true;
+                continue;
+              }
+            } else if (activeBlockingIdRef.current !== block.id && isAndroid) {
+              // Re-assert blocking if we missed stop/start (e.g. app reopen mid-window)
+              void startBlockAppBlocking(block, resolveBlockMessage(block)).catch(() => {});
+              activeBlockingIdRef.current = block.id;
             }
           }
         }
-        // Location blocks are checked asynchronously — skip synchronous firing here
         remaining.push(block);
+      }
+
+      // Stop AppBlocker when no set-hours window is active
+      if (!anySetHoursActive && activeBlockingIdRef.current && isAndroid) {
+        activeBlockingIdRef.current = null;
+        void AppBlocker.stopBlocking().catch(() => { /* ignore */ });
       }
 
       if (changed) {
@@ -108,7 +206,6 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
     check();
     const id = window.setInterval(check, 30_000);
 
-    // Location block polling: check position every 30s separately
     let locationIntervalId: number | null = null;
     if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       const checkLocation = () => {
@@ -133,6 +230,16 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
               );
               if (dist <= block.locationRadius) {
                 firedRef.current.add(firedKey);
+                const messageText = resolveBlockMessage(block);
+                const afterAudio = () => {
+                  void startBlockAppBlocking(block, messageText).catch(() => {});
+                  activeBlockingIdRef.current = block.id;
+                };
+                if (messageText) {
+                  void speak(messageText, settingsStore.get().languageCode).finally(afterAudio);
+                } else {
+                  afterAudio();
+                }
                 onTriggerRef.current(block);
               }
             }
@@ -158,7 +265,6 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
     const snoozeTime = new Date(now.getTime() + block.snoozeMinutes * 60 * 1000);
     const hh = String(snoozeTime.getHours()).padStart(2, '0');
     const mm = String(snoozeTime.getMinutes()).padStart(2, '0');
-    // Snooze creates a new one-shot "set-hours" block starting at snooze time
     const snoozedBlock: DetoxBlock = {
       id: crypto.randomUUID(),
       label: block.label ? `${block.label} (snooze)` : 'Snooze',
@@ -175,7 +281,7 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
       active: true,
       location: null,
       locationRadius: 100,
-      selectedApps: [],
+      selectedApps: [...block.selectedApps],
     };
     blockStore.set({ blocks: [...state.blocks, snoozedBlock] });
   }, []);

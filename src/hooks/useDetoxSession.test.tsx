@@ -13,6 +13,7 @@ let mockSettings: DetoxSettings = {
   customMessages: [],
   userName: '',
   goals: [],
+  preBlockReminderMinutes: 10,
 };
 
 vi.mock('../state/settingsStore', () => ({
@@ -31,6 +32,21 @@ const mockSpeak = vi.fn().mockResolvedValue(undefined);
 vi.mock('../services/audioEngine', () => ({
   isSupported: () => true,
   speak: (...args: unknown[]) => mockSpeak(...args),
+}));
+
+vi.mock('../plugins/AppBlocker', () => ({
+  AppBlocker: {
+    startBlocking: vi.fn().mockResolvedValue(undefined),
+    stopBlocking: vi.fn().mockResolvedValue(undefined),
+    addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
+  },
+}));
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    isNativePlatform: () => false,
+    getPlatform: () => 'web',
+  },
 }));
 
 function advanceTimersBySeconds(seconds: number) {
@@ -52,6 +68,7 @@ describe('useDetoxSession', () => {
       customMessages: [],
       userName: '',
       goals: [],
+      preBlockReminderMinutes: 10,
     };
   });
 

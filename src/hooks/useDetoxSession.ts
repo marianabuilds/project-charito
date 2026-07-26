@@ -6,35 +6,7 @@ import { speak } from '../services/audioEngine';
 import type { DetoxSettings } from '../types/settings';
 import { getBodyCueMessage } from '../utils/bodyCues';
 import { AppBlocker } from '../plugins/AppBlocker';
-
-// ── App-name → Android package-name lookup ────────────────────────────────
-// Used to resolve the human-readable app names stored in SessionView/blockStore
-// into the package names required by AppBlockerService.
-const APP_PACKAGE_MAP: Record<string, string> = {
-  'Instagram':    'com.instagram.android',
-  'TikTok':       'com.zhiliaoapp.musically',
-  'Twitter/X':    'com.twitter.android',
-  'Facebook':     'com.facebook.katana',
-  'Snapchat':     'com.snapchat.android',
-  'Reddit':       'com.reddit.frontpage',
-  'LinkedIn':     'com.linkedin.android',
-  'YouTube':      'com.google.android.youtube',
-  'Netflix':      'com.netflix.mediaclient',
-  'Spotify':      'com.spotify.music',
-  'Twitch':       'tv.twitch.android.app',
-  'WhatsApp':     'com.whatsapp',
-  'Telegram':     'org.telegram.messenger',
-  'iMessage':     'com.apple.MobileSMS', // iOS only — will silently not match on Android
-  'Discord':      'com.discord',
-  'Safari/Chrome':'com.android.chrome',
-  'Games':        '', // no single package — omit
-};
-
-function resolvePackages(appNames: string[]): string[] {
-  return appNames
-    .map((name) => APP_PACKAGE_MAP[name] ?? '')
-    .filter((pkg) => pkg.length > 0);
-}
+import { APP_PACKAGE_MAP, resolvePackages } from '../utils/appPackages';
 
 const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
@@ -46,10 +18,29 @@ export function useDetoxSession() {
   const [currentMessageText, setCurrentMessageText] = useState<string | null>(null);
   const intervalRef = useRef<number | null>(null);
   const [settings, setSettings] = useState<DetoxSettings>(settingsStore.get());
+  const activeReminderRef = useRef<string | null>(null);
+  const selectedAppsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const unsubscribe = settingsStore.subscribe((next) => setSettings(next));
     return unsubscribe;
+  }, []);
+
+  // When user taps "Break block" on the overlay, play the reminder again
+  useEffect(() => {
+    if (!isAndroid) return;
+    let handle: { remove: () => void } | undefined;
+    void AppBlocker.addListener('breakBlock', () => {
+      const text = activeReminderRef.current;
+      if (text) {
+        void speak(text, settingsStore.get().languageCode);
+      }
+    }).then((h) => {
+      handle = h;
+    }).catch(() => { /* plugin unavailable */ });
+    return () => {
+      handle?.remove();
+    };
   }, []);
 
   const totalSeconds = settings.durationMinutes * 60;
@@ -57,18 +48,16 @@ export function useDetoxSession() {
   const clearTimer = useCallback(() => {
     if (intervalRef.current !== null) {
       window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
     }
+    intervalRef.current = null;
   }, []);
 
   const pickMessage = useCallback((): string | null => {
     if (settings.selectedMessageId) {
-      // Check if it matches a custom message in the array
       const customMsg = settings.customMessages.find((m) => m.id === settings.selectedMessageId);
       if (customMsg) {
         return customMsg.text || 'Your custom reminder';
       }
-      // Look up in cultural preset messages
       const preset = culturalPresets.find(
         (p) => p.cultureCode === settings.cultureCode,
       );
@@ -76,13 +65,11 @@ export function useDetoxSession() {
       if (msg) return msg.text;
     }
 
-    // Body-cue messages surface ~30% of the time during evening/morning windows
     const bodyCue = getBodyCueMessage();
     if (bodyCue && Math.random() < 0.3) {
       return bodyCue;
     }
 
-    // Random from all messages in this culture
     const preset = culturalPresets.find(
       (p) => p.cultureCode === settings.cultureCode,
     );
@@ -103,10 +90,12 @@ export function useDetoxSession() {
         }
         setStatus('completed');
         clearTimer();
+        if (isAndroid) {
+          void AppBlocker.stopBlocking().catch(() => { /* ignore */ });
+        }
         return totalSeconds;
       }
 
-      // Gentle mode: speak a reminder every 5 minutes.
       if (settings.mode === 'gentle' && next % (5 * 60) === 0) {
         const text = pickMessage();
         if (text) {
@@ -125,25 +114,43 @@ export function useDetoxSession() {
     clearTimer,
   ]);
 
+  const activateAppBlocking = useCallback(async (selectedApps: string[], reminderText: string | null) => {
+    if (!isAndroid) return;
+    // Empty selectedApps = block all known mapped apps (never includes Phone)
+    const pkgs = resolvePackages(
+      selectedApps.length > 0 ? selectedApps : Object.keys(APP_PACKAGE_MAP),
+    );
+    if (pkgs.length === 0) return;
+
+    const blockEndEpochMs = Date.now() + settings.durationMinutes * 60 * 1000;
+    await AppBlocker.startBlocking({
+      packages: pkgs,
+      blockEndEpochMs,
+      reminderText: reminderText ?? undefined,
+    });
+  }, [settings.durationMinutes]);
+
   const start = useCallback((selectedApps: string[] = []) => {
     if (status === 'running') return;
     setStatus('running');
     setElapsedSeconds(0);
     setCurrentMessageText(null);
     clearTimer();
+    selectedAppsRef.current = selectedApps;
     intervalRef.current = window.setInterval(tick, 1000);
 
-    // On Android: activate the Accessibility Service app blocker
-    if (isAndroid && selectedApps.length > 0) {
-      const packages = resolvePackages(selectedApps);
-      if (packages.length > 0) {
-        const blockEndEpochMs = Date.now() + settings.durationMinutes * 60 * 1000;
-        void AppBlocker.startBlocking({ packages, blockEndEpochMs }).catch(() => {
-          // Silently swallow — if the service isn't enabled, blocking just won't happen
-        });
-      }
+    // 1) Speak reminder first, 2) then activate AppBlocker
+    const text = pickMessage();
+    activeReminderRef.current = text;
+    if (text) {
+      setCurrentMessageText(text);
+      void speak(text, settings.languageCode).finally(() => {
+        void activateAppBlocking(selectedApps, text).catch(() => { /* ignore */ });
+      });
+    } else {
+      void activateAppBlocking(selectedApps, null).catch(() => { /* ignore */ });
     }
-  }, [status, clearTimer, tick, settings.durationMinutes]);
+  }, [status, clearTimer, tick, pickMessage, settings.languageCode, activateAppBlocking]);
 
   const pause = useCallback(() => {
     if (status !== 'running') return;
@@ -162,8 +169,9 @@ export function useDetoxSession() {
     setStatus('idle');
     setElapsedSeconds(0);
     setCurrentMessageText(null);
+    activeReminderRef.current = null;
+    selectedAppsRef.current = [];
     clearTimer();
-    // Ensure blocking is deactivated whenever a session ends or is cancelled
     if (isAndroid) {
       void AppBlocker.stopBlocking().catch(() => { /* ignore */ });
     }

@@ -14,6 +14,7 @@ function getDefaultSettings(): DetoxSettings {
     customMessages: [],
     userName: '',
     goals: [],
+    preBlockReminderMinutes: 10,
   };
 }
 
@@ -45,6 +46,9 @@ function loadSettings(): DetoxSettings {
       ...(Array.isArray(parsed.customMessages) ? { customMessages: parsed.customMessages } : {}),
       ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
       ...(Array.isArray(parsed.goals) ? { goals: parsed.goals as string[] } : {}),
+      ...(typeof parsed.preBlockReminderMinutes === 'number'
+        ? { preBlockReminderMinutes: parsed.preBlockReminderMinutes }
+        : {}),
     };
   } catch {
     return getDefaultSettings();
