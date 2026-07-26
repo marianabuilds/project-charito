@@ -6,6 +6,8 @@ import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import { AppBlocker } from '../plugins/AppBlocker';
+import { BlockScheduler } from '../plugins/BlockScheduler';
+import type { ScheduledBlockNative } from '../plugins/BlockScheduler';
 import { APP_PACKAGE_MAP, resolvePackages } from '../utils/appPackages';
 import {
   isWithinSetHoursWindow,
@@ -111,6 +113,32 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
   useEffect(() => {
     return blockStore.subscribe((next) => setBlockState(next));
   }, []);
+
+  // Sync set-hours blocks to native AlarmManager so they fire when the app is closed / after reboot
+  useEffect(() => {
+    if (!isAndroid) return;
+    const preMins = settingsStore.get().preBlockReminderMinutes ?? 10;
+    const schedules: ScheduledBlockNative[] = blockState.blocks
+      .filter((b) => b.active && b.blockingMethod === 'set-hours' && b.setHoursStart && b.setHoursEnd)
+      .map((b) => {
+        const pkgs = resolvePackages(
+          b.selectedApps.length > 0 ? b.selectedApps : Object.keys(APP_PACKAGE_MAP),
+        );
+        return {
+          id: b.id,
+          label: b.label || 'Detox block',
+          startHHMM: b.setHoursStart,
+          endHHMM: b.setHoursEnd,
+          days: [...b.days],
+          packages: pkgs,
+          preMins,
+          reminderText: resolveBlockMessage(b) ?? undefined,
+        };
+      })
+      .filter((s) => s.packages.length > 0);
+
+    void BlockScheduler.syncSchedules({ schedules }).catch(() => { /* ignore on web/plugin miss */ });
+  }, [blockState.blocks]);
 
   useEffect(() => {
     function check() {

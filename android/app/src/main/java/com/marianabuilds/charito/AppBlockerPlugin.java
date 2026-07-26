@@ -6,8 +6,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
+import android.os.Build;
 import android.provider.Settings;
-import android.text.TextUtils;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -17,8 +21,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -172,6 +177,99 @@ public class AppBlockerPlugin extends Plugin {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
         call.resolve();
+    }
+
+    /**
+     * Returns whether "Display over other apps" (SYSTEM_ALERT_WINDOW) is granted.
+     */
+    @PluginMethod
+    public void hasOverlayPermission(PluginCall call) {
+        JSObject result = new JSObject();
+        boolean granted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            granted = Settings.canDrawOverlays(getContext());
+        }
+        result.put("granted", granted);
+        call.resolve(result);
+    }
+
+    /**
+     * Opens the system screen to grant "Display over other apps".
+     */
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        try {
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                intent = new Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getContext().getPackageName())
+                );
+            } else {
+                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    /**
+     * Returns launcher apps installed on the device (for the app picker UI).
+     * Phone/dialer packages and Charito itself are excluded.
+     *
+     * Returns: { apps: Array<{ packageName, appName }> }
+     */
+    @PluginMethod
+    public void getInstalledApps(PluginCall call) {
+        PackageManager pm = getContext().getPackageManager();
+        Intent main = new Intent(Intent.ACTION_MAIN, null);
+        main.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> resolved = pm.queryIntentActivities(main, 0);
+
+        java.util.ArrayList<String[]> rows = new java.util.ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        String selfPkg = getContext().getPackageName();
+
+        for (ResolveInfo ri : resolved) {
+            if (ri.activityInfo == null) continue;
+            String pkg = ri.activityInfo.packageName;
+            if (pkg == null || seen.contains(pkg)) continue;
+            if (pkg.equals(selfPkg) || PHONE_PACKAGES.contains(pkg)) continue;
+            if (pkg.equals("com.android.settings") || pkg.equals("com.android.systemui")) continue;
+
+            seen.add(pkg);
+            String label;
+            try {
+                ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
+                label = pm.getApplicationLabel(info).toString();
+            } catch (Exception e) {
+                label = pkg;
+            }
+            rows.add(new String[]{ pkg, label });
+        }
+
+        Collections.sort(rows, new Comparator<String[]>() {
+            @Override
+            public int compare(String[] a, String[] b) {
+                return a[1].compareToIgnoreCase(b[1]);
+            }
+        });
+
+        JSArray apps = new JSArray();
+        for (String[] row : rows) {
+            JSObject obj = new JSObject();
+            obj.put("packageName", row[0]);
+            obj.put("appName", row[1]);
+            apps.put(obj);
+        }
+
+        JSObject result = new JSObject();
+        result.put("apps", apps);
+        call.resolve(result);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

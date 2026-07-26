@@ -5,6 +5,7 @@ import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
+import { useInstalledApps } from '../hooks/useInstalledApps';
 
 // Single-letter day labels: S M T W T F S
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -179,6 +180,8 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
   const [blocks, setBlocks] = React.useState<DetoxBlock[]>(blockStore.get().blocks);
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+  const { apps: installedApps, isNativeList } = useInstalledApps();
+  const seededNativeRef = React.useRef(false);
 
   React.useEffect(() => {
     if (prefill) {
@@ -188,6 +191,19 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  React.useEffect(() => {
+    if (!isNativeList || installedApps.length === 0 || seededNativeRef.current || !showForm) return;
+    seededNativeRef.current = true;
+    setForm((f) => {
+      if (f.selectedApps.some((a) => a.includes('.'))) return f;
+      const popular = ['com.instagram.android', 'com.zhiliaoapp.musically', 'com.google.android.youtube', 'com.twitter.android'];
+      const next = installedApps
+        .filter((a) => popular.includes(a.packageName))
+        .map((a) => a.packageName);
+      return next.length > 0 ? { ...f, selectedApps: next } : f;
+    });
+  }, [isNativeList, installedApps, showForm]);
 
   // Preview a message via TTS
   const [previewingSpeech, setPreviewingSpeech] = React.useState(false);
@@ -305,8 +321,17 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
     }));
   };
 
+  const selectableIds = isNativeList
+    ? installedApps.map((a) => a.packageName)
+    : [...COMMON_APPS];
+
+  const labelForApp = (id: string) =>
+    isNativeList
+      ? (installedApps.find((a) => a.packageName === id)?.appName ?? id)
+      : id;
+
   const selectAllApps = () => {
-    setForm((f) => ({ ...f, selectedApps: [...COMMON_APPS] }));
+    setForm((f) => ({ ...f, selectedApps: [...selectableIds] }));
   };
 
   const selectCategoryApps = (apps: readonly string[]) => {
@@ -326,7 +351,8 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
       (form.setHoursStart.length > 0 && form.setHoursEnd.length > 0)) &&
     (form.blockingMethod !== 'location' || form.location !== null);
 
-  const allAppsSelected = form.selectedApps.length === COMMON_APPS.length;
+  const allAppsSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => form.selectedApps.includes(id));
   const appsBadge = allAppsSelected
     ? 'All apps'
     : `${form.selectedApps.length} app${form.selectedApps.length === 1 ? '' : 's'}`;
@@ -335,8 +361,9 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
   const appsPreviewText = allAppsSelected || form.selectedApps.length === 0
     ? null
     : (() => {
-        const preview = form.selectedApps.slice(0, 3).join(', ');
-        const remainder = form.selectedApps.length - 3;
+        const names = form.selectedApps.map(labelForApp);
+        const preview = names.slice(0, 3).join(', ');
+        const remainder = names.length - 3;
         return remainder > 0 ? `${preview} +${remainder} more` : preview;
       })();
 
@@ -591,63 +618,85 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
             </button>
             {form.appsExpanded && (
               <div className="apps-list">
-                {/* Recommended shortcuts */}
-                <div className="apps-recommended-row">
-                  <button
-                    type="button"
-                    className="apps-recommended-btn"
-                    onClick={() => setForm((f) => ({ ...f, selectedApps: [...APP_CATEGORIES[0].apps] }))}
-                  >
-                    ＋ Add social media block
-                  </button>
-                  <button
-                    type="button"
-                    className="apps-recommended-btn"
-                    onClick={() => setForm((f) => ({ ...f, selectedApps: [...TOP_HIGH_DATA] }))}
-                  >
-                    ＋ Add high-usage block
-                  </button>
-                </div>
-
-                {!allAppsSelected && (
-                  <button
-                    type="button"
-                    className="apps-select-all-btn"
-                    onClick={selectAllApps}
-                  >
-                    Select all
-                  </button>
-                )}
-
-                {/* Categorized list */}
-                {APP_CATEGORIES.map((cat) => (
-                  <div key={cat.label} className="apps-category-group">
-                    <div className="apps-category-header">
-                      <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                {isNativeList ? (
+                  <>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0 0 0.5rem' }}>
+                      Apps installed on this phone. Phone/Dialer is never blocked.
+                    </p>
+                    {!allAppsSelected && (
+                      <button type="button" className="apps-select-all-btn" onClick={selectAllApps}>
+                        Select all
+                      </button>
+                    )}
+                    <div className="apps-category-group">
+                      {installedApps.map((app) => (
+                        <label key={app.packageName} className="apps-list-row">
+                          <input
+                            type="checkbox"
+                            checked={form.selectedApps.includes(app.packageName)}
+                            onChange={() => toggleApp(app.packageName)}
+                            className="apps-checkbox"
+                          />
+                          <span className="apps-list-name">{app.appName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="apps-recommended-row">
                       <button
                         type="button"
-                        className="apps-category-all-btn"
-                        onClick={() => selectCategoryApps(cat.apps)}
+                        className="apps-recommended-btn"
+                        onClick={() => setForm((f) => ({ ...f, selectedApps: [...APP_CATEGORIES[0].apps] }))}
                       >
-                        All
+                        ＋ Add social media block
+                      </button>
+                      <button
+                        type="button"
+                        className="apps-recommended-btn"
+                        onClick={() => setForm((f) => ({ ...f, selectedApps: [...TOP_HIGH_DATA] }))}
+                      >
+                        ＋ Add high-usage block
                       </button>
                     </div>
-                    {cat.apps.map((app) => (
-                      <label key={app} className="apps-list-row">
-                        <input
-                          type="checkbox"
-                          checked={form.selectedApps.includes(app)}
-                          onChange={() => toggleApp(app)}
-                          className="apps-checkbox"
-                        />
-                        <span className="apps-list-name">{app}</span>
-                        {HIGH_USAGE_APPS.has(app) && (
-                          <span className="apps-high-usage-tag">📱 High usage</span>
-                        )}
-                      </label>
+
+                    {!allAppsSelected && (
+                      <button type="button" className="apps-select-all-btn" onClick={selectAllApps}>
+                        Select all
+                      </button>
+                    )}
+
+                    {APP_CATEGORIES.map((cat) => (
+                      <div key={cat.label} className="apps-category-group">
+                        <div className="apps-category-header">
+                          <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                          <button
+                            type="button"
+                            className="apps-category-all-btn"
+                            onClick={() => selectCategoryApps(cat.apps)}
+                          >
+                            All
+                          </button>
+                        </div>
+                        {cat.apps.map((app) => (
+                          <label key={app} className="apps-list-row">
+                            <input
+                              type="checkbox"
+                              checked={form.selectedApps.includes(app)}
+                              onChange={() => toggleApp(app)}
+                              className="apps-checkbox"
+                            />
+                            <span className="apps-list-name">{app}</span>
+                            {HIGH_USAGE_APPS.has(app) && (
+                              <span className="apps-high-usage-tag">📱 High usage</span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
                     ))}
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -43,10 +43,17 @@ export const PHONE_PACKAGES = new Set([
 /** Display names that must never appear as selectable blocked apps. */
 export const EXCLUDED_APP_NAMES = new Set(['Phone', 'Dialer', 'Phone/Dialer', 'Calls']);
 
+/**
+ * Resolve display names and/or raw package names into Android packages.
+ * Values that look like packages (contain a dot) are passed through.
+ */
 export function resolvePackages(appNames: string[]): string[] {
   return appNames
     .filter((name) => !EXCLUDED_APP_NAMES.has(name))
-    .map((name) => APP_PACKAGE_MAP[name] ?? '')
+    .map((name) => {
+      if (name.includes('.') && !name.includes(' ')) return name;
+      return APP_PACKAGE_MAP[name] ?? '';
+    })
     .filter((pkg) => pkg.length > 0 && !PHONE_PACKAGES.has(pkg));
 }
 

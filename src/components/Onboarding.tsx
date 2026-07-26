@@ -4,13 +4,6 @@ import { settingsStore } from '../state/settingsStore';
 
 const ONBOARDING_KEY = 'charito:onboarded:v1';
 
-const GOALS = [
-  { id: 'sleep',      emoji: '😴', label: 'Sleep',      subtext: 'Rest and recharge' },
-  { id: 'focus',      emoji: '🧠', label: 'Focus',      subtext: 'Deep work without distraction' },
-  { id: 'presence',   emoji: '🫶', label: 'Presence',   subtext: 'Be here with the people you love' },
-  { id: 'creativity', emoji: '🎨', label: 'Creativity', subtext: 'Space to think and create' },
-] as const;
-
 const BENEFIT_PILLS = [
   '🧘 Less stress',
   '😴 Better sleep',
@@ -31,16 +24,6 @@ const HOW_IT_WORKS = [
     body: "Charito speaks to you in your culture's language. Gentle. Personal. Real.",
   },
   {
-    emoji: '🌙',
-    title: 'Body-aware reminders',
-    body: 'Charito notices the time and nudges you accordingly \u2014 so you wind down when your body needs it most.',
-  },
-  {
-    emoji: '⏳',
-    title: 'Reclaim your time',
-    body: 'Every completed block adds up. Charito shows you exactly how many hours you got back \u2014 for sleep, focus, and the people you love.',
-  },
-  {
     emoji: '🤖',
     title: 'Smart recommendations',
     body: 'Charito learns your habits and suggests personalized blocks \u2014 so you spend less time deciding and more time living.',
@@ -52,6 +35,14 @@ const HOW_IT_WORKS = [
   },
 ];
 
+const TOTAL_SCREENS = 6;
+type OnboardingScreen = 1 | 2 | 3 | 4 | 5 | 6;
+type MicStatus = 'idle' | 'granted' | 'denied';
+
+const SCREENS: OnboardingScreen[] = [1, 2, 3, 4, 5, 6];
+
+const SWIPE_THRESHOLD_PX = 50;
+
 function hasOnboarded(): boolean {
   try { return Boolean(localStorage.getItem(ONBOARDING_KEY)); } catch { return false; }
 }
@@ -60,13 +51,9 @@ function markOnboarded(): void {
   try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch {}
 }
 
-type OnboardingScreen = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-type MicStatus = 'idle' | 'granted' | 'denied';
-
 export const Onboarding: React.FC = () => {
   const [visible, setVisible] = React.useState(!hasOnboarded());
   const [screen, setScreen] = React.useState<OnboardingScreen>(1);
-  const [selectedGoals, setSelectedGoals] = React.useState<string[]>([]);
 
   // Live preview countdown
   const [previewSecs, setPreviewSecs] = React.useState(90);
@@ -78,45 +65,127 @@ export const Onboarding: React.FC = () => {
     if (Notification.permission === 'granted') return 'granted';
     return 'idle';
   });
-  const [appUsageStatus, setAppUsageStatus] = React.useState<'idle' | 'coming-soon'>('idle');
-  const [accessibilityStatus, setAccessibilityStatus] = React.useState<'idle' | 'opened'>('idle');
+  const [appUsageStatus, setAppUsageStatus] = React.useState<'idle' | 'opened' | 'granted'>('idle');
+  const [accessibilityStatus, setAccessibilityStatus] = React.useState<'idle' | 'opened' | 'granted'>('idle');
+  const [overlayStatus, setOverlayStatus] = React.useState<'idle' | 'opened' | 'granted'>('idle');
   const [micStatus, setMicStatus] = React.useState<MicStatus>('idle');
+
+  // Refresh Android permission statuses when entering the permissions screen
+  React.useEffect(() => {
+    if (screen !== 5) return;
+    void (async () => {
+      try {
+        const { AppBlocker } = await import('../plugins/AppBlocker');
+        const { BlockScheduler } = await import('../plugins/BlockScheduler');
+        const [a11y, overlay, notif] = await Promise.all([
+          AppBlocker.hasAccessibilityPermission(),
+          AppBlocker.hasOverlayPermission(),
+          BlockScheduler.hasNotificationPermission(),
+        ]);
+        if (a11y.granted) setAccessibilityStatus('granted');
+        if (overlay.granted) setOverlayStatus('granted');
+        if (notif.granted) setNotifStatus('granted');
+      } catch { /* web preview */ }
+    })();
+  }, [screen]);
+
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
 
   const dismiss = () => { markOnboarded(); setVisible(false); };
 
-  const toggleGoal = (id: string) => {
-    setSelectedGoals((prev) =>
-      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id],
-    );
+  const goNext = React.useCallback(() => {
+    setScreen((s) => (s < TOTAL_SCREENS ? ((s + 1) as OnboardingScreen) : s));
+  }, []);
+
+  const goBack = React.useCallback(() => {
+    setScreen((s) => (s > 1 ? ((s - 1) as OnboardingScreen) : s));
+  }, []);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.changedTouches[0];
+    if (!t) return;
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
   };
 
-  const handleGoalsContinue = () => {
-    settingsStore.set({ goals: selectedGoals });
-    setScreen(4);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Prefer horizontal swipes; ignore mostly-vertical scrolls
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) goNext();
+    else goBack();
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Touch is handled via touch events; avoid double-firing on touch devices
+    if (e.pointerType === 'touch') return;
+    touchStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') return;
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) goNext();
+    else goBack();
   };
 
   const handleAllowNotifications = async () => {
+    try {
+      const { ensureNotificationPermission } = await import('../utils/notifications');
+      const ok = await ensureNotificationPermission();
+      setNotifStatus(ok ? 'granted' : 'denied');
+      return;
+    } catch { /* fall through */ }
     if (!('Notification' in window)) { setNotifStatus('unsupported'); return; }
     if (Notification.permission === 'granted') { setNotifStatus('granted'); return; }
     const result = await Notification.requestPermission();
     setNotifStatus(result === 'granted' ? 'granted' : 'denied');
   };
 
-  const handleAppUsage = () => {
-    alert('App usage access requires native app permissions. This feature is coming in the mobile app.');
-    setAppUsageStatus('coming-soon');
+  const handleAppUsage = async () => {
+    try {
+      const { UsageStats } = await import('../plugins/UsageStats');
+      await UsageStats.openUsageAccessSettings();
+      setAppUsageStatus('opened');
+    } catch {
+      alert('Open Settings \u2192 Apps \u2192 Special app access \u2192 Usage access \u2192 Charito.');
+      setAppUsageStatus('opened');
+    }
   };
 
   const handleAccessibilityPermission = async () => {
     try {
-      // Dynamically import so the plugin is only loaded on Android
       const { AppBlocker } = await import('../plugins/AppBlocker');
+      const status = await AppBlocker.hasAccessibilityPermission();
+      if (status.granted) { setAccessibilityStatus('granted'); return; }
       await AppBlocker.openAccessibilitySettings();
       setAccessibilityStatus('opened');
     } catch {
-      // On web or iOS, inform the user this is Android-only
-      alert('App blocking via Accessibility Service is available in the Android app. Enable it in Settings \u2192 Accessibility \u2192 Charito after installing the app.');
+      alert('App blocking is available in the Android app. Enable Charito in Settings \u2192 Accessibility.');
       setAccessibilityStatus('opened');
+    }
+  };
+
+  const handleOverlayPermission = async () => {
+    try {
+      const { AppBlocker } = await import('../plugins/AppBlocker');
+      const status = await AppBlocker.hasOverlayPermission();
+      if (status.granted) { setOverlayStatus('granted'); return; }
+      await AppBlocker.openOverlaySettings();
+      setOverlayStatus('opened');
+    } catch {
+      alert('Allow Charito to display over other apps in Settings \u2192 Special app access.');
+      setOverlayStatus('opened');
     }
   };
 
@@ -129,9 +198,9 @@ export const Onboarding: React.FC = () => {
     }
   };
 
-  // Live preview timer — start when entering screen 5
+  // Live preview timer — start when entering screen 4
   React.useEffect(() => {
-    if (screen === 5) {
+    if (screen === 4) {
       setPreviewSecs(90);
       setPreviewRunning(true);
     } else {
@@ -152,7 +221,16 @@ export const Onboarding: React.FC = () => {
   if (!visible) return null;
 
   return (
-    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Charito">
+    <div
+      className="onboarding-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Welcome to Charito"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+    >
       <div className="onboarding-container">
 
         {/* ── Screen 1 — Intro ─────────────────────────────────────────── */}
@@ -218,75 +296,10 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* ── Screen 3 — Goals ─────────────────────────────────────────── */}
+        {/* ── Screen 3 — How it works ───────────────────────────────────── */}
         {screen === 3 && (
           <div className="onboarding-screen">
             <button type="button" className="onboarding-back-btn" onClick={() => setScreen(2)}>&#8592;</button>
-            <h1 className="onboarding-heading">What do you want more of?</h1>
-            <p className="onboarding-subtext">
-              We'll personalize your reminders around what matters to you.
-            </p>
-            <div className="onboarding-goals-grid">
-              {GOALS.map((goal) => {
-                const isSelected = selectedGoals.includes(goal.id);
-                return (
-                  <button
-                    key={goal.id}
-                    type="button"
-                    className={`onboarding-goal-card${isSelected ? ' onboarding-goal-card--selected' : ''}`}
-                    onClick={() => toggleGoal(goal.id)}
-                    aria-pressed={isSelected}
-                    style={{
-                      position: 'relative',
-                      border: isSelected ? '2px solid var(--accent)' : undefined,
-                      background: isSelected ? 'var(--accent-bg)' : undefined,
-                    }}
-                  >
-                    {/* Checkmark badge */}
-                    {isSelected && (
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: '0.375rem',
-                          right: '0.375rem',
-                          width: '1.1rem',
-                          height: '1.1rem',
-                          borderRadius: '50%',
-                          background: 'var(--accent)',
-                          color: '#fff',
-                          fontSize: '0.65rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          lineHeight: 1,
-                        }}
-                      >
-                        &#10003;
-                      </span>
-                    )}
-                    <span className="onboarding-goal-emoji" aria-hidden="true">{goal.emoji}</span>
-                    <span className="onboarding-goal-label">{goal.label}</span>
-                    <span className="onboarding-goal-subtext">{goal.subtext}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              className="button button-primary onboarding-btn"
-              onClick={handleGoalsContinue}
-            >
-              Continue &#8594;
-            </button>
-          </div>
-        )}
-
-        {/* ── Screen 4 — How it works ───────────────────────────────────── */}
-        {screen === 4 && (
-          <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(3)}>&#8592;</button>
             <h1 className="onboarding-heading">How Charito works</h1>
             <p className="onboarding-subtext">Simple. Honest. Built around your life.</p>
             <div className="onboarding-how-cards">
@@ -306,17 +319,17 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(5)}
+              onClick={() => setScreen(4)}
             >
               Got it &#8594;
             </button>
           </div>
         )}
 
-        {/* ── Screen 5 — Live preview ───────────────────────────────────── */}
-        {screen === 5 && (
+        {/* ── Screen 4 — Live preview ───────────────────────────────────── */}
+        {screen === 4 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(4)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(3)}>&#8592;</button>
             <h1 className="onboarding-heading">Here's what it looks like</h1>
             <p className="onboarding-subtext">When a detox block is active, you'll see this.</p>
 
@@ -352,17 +365,17 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(6)}
+              onClick={() => setScreen(5)}
             >
               Looks good &#8594;
             </button>
           </div>
         )}
 
-        {/* ── Screen 6 — Permissions ───────────────────────────────────── */}
-        {screen === 6 && (
+        {/* ── Screen 5 — Permissions ───────────────────────────────────── */}
+        {screen === 5 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(5)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(4)}>&#8592;</button>
             <h1 className="onboarding-heading">A few permissions</h1>
             <p className="onboarding-subtext">
               Charito works best with these enabled. You can change them anytime in Settings.
@@ -387,8 +400,8 @@ export const Onboarding: React.FC = () => {
               <button
                 type="button"
                 className="onboarding-permission-row"
-                onClick={handleAppUsage}
-                disabled={appUsageStatus === 'coming-soon'}
+                onClick={() => void handleAppUsage()}
+                disabled={appUsageStatus === 'granted'}
               >
                 <span className="onboarding-permission-icon" aria-hidden="true">&#128202;</span>
                 <div className="onboarding-permission-text">
@@ -396,9 +409,7 @@ export const Onboarding: React.FC = () => {
                   <span className="onboarding-permission-desc">See which apps you use most — smarter block suggestions</span>
                 </div>
                 <span className="onboarding-permission-action">
-                  {appUsageStatus === 'coming-soon'
-                    ? <span style={{ fontSize: '0.7rem', color: 'var(--text-m)' }}>Coming in app</span>
-                    : 'Allow \u2192'}
+                  {appUsageStatus === 'granted' ? '&#10003;' : appUsageStatus === 'opened' ? 'Opened \u203a' : 'Allow \u2192'}
                 </span>
               </button>
 
@@ -406,17 +417,31 @@ export const Onboarding: React.FC = () => {
                 type="button"
                 className="onboarding-permission-row"
                 onClick={() => void handleAccessibilityPermission()}
-                disabled={accessibilityStatus === 'opened'}
+                disabled={accessibilityStatus === 'granted'}
               >
                 <span className="onboarding-permission-icon" aria-hidden="true">&#128274;</span>
                 <div className="onboarding-permission-text">
                   <span className="onboarding-permission-title">App blocking</span>
-                  <span className="onboarding-permission-desc">Block apps when a detox session is active — requires Accessibility access</span>
+                  <span className="onboarding-permission-desc">Pause selected apps during a detox — Accessibility access</span>
                 </div>
                 <span className="onboarding-permission-action">
-                  {accessibilityStatus === 'opened'
-                    ? <span style={{ fontSize: '0.7rem', color: 'var(--text-m)' }}>Opened &#8250;</span>
-                    : 'Enable \u2192'}
+                  {accessibilityStatus === 'granted' ? '&#10003;' : accessibilityStatus === 'opened' ? 'Opened \u203a' : 'Enable \u2192'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="onboarding-permission-row"
+                onClick={() => void handleOverlayPermission()}
+                disabled={overlayStatus === 'granted'}
+              >
+                <span className="onboarding-permission-icon" aria-hidden="true">&#128438;</span>
+                <div className="onboarding-permission-text">
+                  <span className="onboarding-permission-title">Display over apps</span>
+                  <span className="onboarding-permission-desc">Show the blocked-app screen on top of Instagram, TikTok, etc.</span>
+                </div>
+                <span className="onboarding-permission-action">
+                  {overlayStatus === 'granted' ? '&#10003;' : overlayStatus === 'opened' ? 'Opened \u203a' : 'Enable \u2192'}
                 </span>
               </button>
 
@@ -440,24 +465,24 @@ export const Onboarding: React.FC = () => {
             <button
               type="button"
               className="button button-primary onboarding-btn"
-              onClick={() => setScreen(7)}
+              onClick={() => setScreen(6)}
             >
               Continue &#8594;
             </button>
             <button
               type="button"
               className="onboarding-skip-link"
-              onClick={() => setScreen(7)}
+              onClick={() => setScreen(6)}
             >
               Skip for now
             </button>
           </div>
         )}
 
-        {/* ── Screen 7 — Done ──────────────────────────────────────────── */}
-        {screen === 7 && (
+        {/* ── Screen 6 — Done ──────────────────────────────────────────── */}
+        {screen === 6 && (
           <div className="onboarding-screen">
-            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(6)}>&#8592;</button>
+            <button type="button" className="onboarding-back-btn" onClick={() => setScreen(5)}>&#8592;</button>
             <div className="onboarding-leaf-cluster" aria-hidden="true">
               <span className="onboarding-leaf-side"><LeafIcon size={28} className="onboarding-leaf" /></span>
               <LeafIcon size={52} className="onboarding-leaf onboarding-leaf--center" />
@@ -477,9 +502,9 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* ── Dot indicators — 7 dots ──────────────────────────────────── */}
+        {/* ── Dot indicators — 6 dots ──────────────────────────────────── */}
         <div className="onboarding-dots" aria-hidden="true">
-          {([1, 2, 3, 4, 5, 6, 7] as OnboardingScreen[]).map((s) => (
+          {SCREENS.map((s) => (
             <span
               key={s}
               className={`onboarding-dot${screen === s ? ' onboarding-dot--active' : ''}`}

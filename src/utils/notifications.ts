@@ -1,10 +1,26 @@
+import { Capacitor } from '@capacitor/core';
+
 /**
  * Lightweight pre-block notifications.
- * Uses the Web Notification API (works in browsers + Capacitor WebView when permitted).
- * No @capacitor/local-notifications dependency required.
+ * On Android: uses BlockScheduler native notifications + AlarmManager.
+ * On web: Web Notification API.
  */
 
+const isAndroid = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
 export async function ensureNotificationPermission(): Promise<boolean> {
+  if (isAndroid()) {
+    try {
+      const { BlockScheduler } = await import('../plugins/BlockScheduler');
+      const status = await BlockScheduler.hasNotificationPermission();
+      if (status.granted) return true;
+      const requested = await BlockScheduler.requestNotificationPermission();
+      return requested.granted;
+    } catch {
+      // fall through to web API
+    }
+  }
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
   if (Notification.permission === 'granted') return true;
   if (Notification.permission === 'denied') return false;
@@ -22,6 +38,9 @@ export async function showLocalNotification(
 ): Promise<void> {
   const ok = await ensureNotificationPermission();
   if (!ok) return;
+  // On Android, AlarmManager + BlockAlarmReceiver owns scheduled notifications.
+  // This helper remains for immediate in-app / web fallbacks.
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
   try {
     new Notification(title, { body, silent: false });
   } catch {

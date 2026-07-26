@@ -8,7 +8,7 @@ import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
 import { rewardsStore } from '../state/rewardsStore';
 import { streakStore } from '../state/streakStore';
-
+import { useInstalledApps, FALLBACK_APP_CATEGORIES } from '../hooks/useInstalledApps';
 const JOURNAL_TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'] as const;
 
 const AMBIENT_SOUNDS = [
@@ -18,17 +18,18 @@ const AMBIENT_SOUNDS = [
   { id: 'lofi', label: 'Lo-fi', url: 'https://cdn.pixabay.com/download/audio/2023/01/27/audio_8b378b3728.mp3' },
 ] as const;
 
-// ── App categories ──────────────────────────────────────────────────────────
-const APP_CATEGORIES = [
-  { label: 'Social Media', apps: ['Instagram', 'TikTok', 'Twitter/X', 'Facebook', 'Snapchat', 'Reddit', 'LinkedIn'] },
-  { label: 'Video & Music', apps: ['YouTube', 'Netflix', 'Spotify', 'Twitch'] },
-  { label: 'Messaging', apps: ['WhatsApp', 'Telegram', 'iMessage', 'Discord'] },
-  { label: 'Browser & Games', apps: ['Safari/Chrome', 'Games'] },
-] as const;
-
-const COMMON_APPS = APP_CATEGORIES.flatMap((c) => c.apps);
+// ── App categories (web fallback) ───────────────────────────────────────────
+const APP_CATEGORIES = FALLBACK_APP_CATEGORIES;
+const COMMON_APPS = APP_CATEGORIES.flatMap((c) => [...c.apps]);
 const HIGH_USAGE_APPS = new Set(['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook']);
 const TOP_HIGH_DATA = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X'];
+const POPULAR_PACKAGE_HINTS = [
+  'com.instagram.android',
+  'com.zhiliaoapp.musically',
+  'com.google.android.youtube',
+  'com.twitter.android',
+  'com.facebook.katana',
+];
 
 // Duration quick-pick pills
 const DURATION_PILLS = [15, 30, 45, 60, 90, 120] as const;
@@ -90,6 +91,30 @@ export const SessionView: React.FC = () => {
   const [previewingId, setPreviewingId] = React.useState<string | null>(null);
   const [quickSelectedApps, setQuickSelectedApps] = React.useState<string[]>([...COMMON_APPS]);
   const [quickAppsExpanded, setQuickAppsExpanded] = React.useState(false);
+  const { apps: installedApps, isNativeList } = useInstalledApps();
+  const seededNativeRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isNativeList || installedApps.length === 0 || seededNativeRef.current) return;
+    seededNativeRef.current = true;
+    const popular = installedApps
+      .filter((a) => POPULAR_PACKAGE_HINTS.includes(a.packageName))
+      .map((a) => a.packageName);
+    setQuickSelectedApps(
+      popular.length > 0 ? popular : installedApps.slice(0, 8).map((a) => a.packageName),
+    );
+  }, [isNativeList, installedApps]);
+
+  const selectableIds = isNativeList
+    ? installedApps.map((a) => a.packageName)
+    : COMMON_APPS;
+
+  const labelForId = (id: string): string => {
+    if (isNativeList) {
+      return installedApps.find((a) => a.packageName === id)?.appName ?? id;
+    }
+    return id;
+  };
 
   const toggleQuickApp = (app: string) => {
     setQuickSelectedApps((prev) =>
@@ -105,17 +130,19 @@ export const SessionView: React.FC = () => {
     });
   };
 
-  const quickAllAppsSelected = quickSelectedApps.length === COMMON_APPS.length;
+  const quickAllAppsSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => quickSelectedApps.includes(id));
   const quickAppsBadge = quickAllAppsSelected
     ? 'All apps'
     : `${quickSelectedApps.length} app${quickSelectedApps.length === 1 ? '' : 's'}`;
 
   const quickAppsPreviewText = React.useMemo(() => {
     if (quickAllAppsSelected || quickSelectedApps.length === 0) return null;
-    const preview = quickSelectedApps.slice(0, 3).join(', ');
-    const remainder = quickSelectedApps.length - 3;
+    const names = quickSelectedApps.map(labelForId);
+    const preview = names.slice(0, 3).join(', ');
+    const remainder = names.length - 3;
     return remainder > 0 ? `${preview} +${remainder} more` : preview;
-  }, [quickSelectedApps, quickAllAppsSelected]);
+  }, [quickSelectedApps, quickAllAppsSelected, isNativeList, installedApps]);
 
   React.useEffect(() => {
     if (status === 'completed') {
@@ -198,8 +225,12 @@ export const SessionView: React.FC = () => {
     if (quickMethod === null) return;
     settingsStore.set({ durationMinutes: quickDuration });
     settingsStore.set({ selectedMessageId: quickMessageId || null });
-    // Pass selected apps so useDetoxSession can activate Android app blocking
-    start(quickAllAppsSelected ? [] : quickSelectedApps);
+    // Pass selected apps (display names on web, package names on Android)
+    start(
+      quickSelectedApps.length > 0
+        ? quickSelectedApps
+        : selectableIds,
+    );
     toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
 
@@ -270,43 +301,90 @@ export const SessionView: React.FC = () => {
           )}
           {quickAppsExpanded && (
             <div className="apps-list" style={{ marginTop: '0.375rem' }}>
-              <div className="apps-recommended-row">
-                <button type="button" className="apps-recommended-btn"
-                  onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}>
-                  ＋ Social media block
-                </button>
-                <button type="button" className="apps-recommended-btn"
-                  onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}>
-                  ＋ High-usage block
-                </button>
-              </div>
-              {!quickAllAppsSelected && (
-                <button type="button" className="apps-select-all-btn"
-                  onClick={() => setQuickSelectedApps([...COMMON_APPS])}>
-                  Select all
-                </button>
-              )}
-              {APP_CATEGORIES.map((cat) => (
-                <div key={cat.label} className="apps-category-group">
-                  <div className="apps-category-header">
-                    <span className="apps-category-label">{cat.label.toUpperCase()}</span>
-                    <button type="button" className="apps-category-all-btn"
-                      onClick={() => selectCategoryApps(cat.apps)}>
-                      All
+              {isNativeList ? (
+                <>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0 0 0.5rem' }}>
+                    Apps installed on this phone. Phone/Dialer is never blocked.
+                  </p>
+                  <div className="apps-recommended-row">
+                    <button
+                      type="button"
+                      className="apps-recommended-btn"
+                      onClick={() =>
+                        setQuickSelectedApps(
+                          installedApps
+                            .filter((a) => POPULAR_PACKAGE_HINTS.includes(a.packageName))
+                            .map((a) => a.packageName),
+                        )
+                      }
+                    >
+                      ＋ Popular apps
+                    </button>
+                    {!quickAllAppsSelected && (
+                      <button
+                        type="button"
+                        className="apps-select-all-btn"
+                        onClick={() => setQuickSelectedApps([...selectableIds])}
+                      >
+                        Select all
+                      </button>
+                    )}
+                  </div>
+                  <div className="apps-category-group">
+                    {installedApps.map((app) => (
+                      <label key={app.packageName} className="apps-list-row">
+                        <input
+                          type="checkbox"
+                          checked={quickSelectedApps.includes(app.packageName)}
+                          onChange={() => toggleQuickApp(app.packageName)}
+                          className="apps-checkbox"
+                        />
+                        <span className="apps-list-name">{app.appName}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="apps-recommended-row">
+                    <button type="button" className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}>
+                      ＋ Social media block
+                    </button>
+                    <button type="button" className="apps-recommended-btn"
+                      onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}>
+                      ＋ High-usage block
                     </button>
                   </div>
-                  {cat.apps.map((app) => (
-                    <label key={app} className="apps-list-row">
-                      <input type="checkbox" checked={quickSelectedApps.includes(app)}
-                        onChange={() => toggleQuickApp(app)} className="apps-checkbox" />
-                      <span className="apps-list-name">{app}</span>
-                      {HIGH_USAGE_APPS.has(app) && (
-                        <span className="apps-high-usage-tag">📱 High usage</span>
-                      )}
-                    </label>
+                  {!quickAllAppsSelected && (
+                    <button type="button" className="apps-select-all-btn"
+                      onClick={() => setQuickSelectedApps([...COMMON_APPS])}>
+                      Select all
+                    </button>
+                  )}
+                  {APP_CATEGORIES.map((cat) => (
+                    <div key={cat.label} className="apps-category-group">
+                      <div className="apps-category-header">
+                        <span className="apps-category-label">{cat.label.toUpperCase()}</span>
+                        <button type="button" className="apps-category-all-btn"
+                          onClick={() => selectCategoryApps(cat.apps)}>
+                          All
+                        </button>
+                      </div>
+                      {cat.apps.map((app) => (
+                        <label key={app} className="apps-list-row">
+                          <input type="checkbox" checked={quickSelectedApps.includes(app)}
+                            onChange={() => toggleQuickApp(app)} className="apps-checkbox" />
+                          <span className="apps-list-name">{app}</span>
+                          {HIGH_USAGE_APPS.has(app) && (
+                            <span className="apps-high-usage-tag">📱 High usage</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
                   ))}
-                </div>
-              ))}
+                </>
+              )}
             </div>
           )}
         </div>
