@@ -1349,6 +1349,15 @@ input[type='range'] {
   flex-direction: column;
   gap: 0;
   padding: 1.375rem 0;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+}
+
+@media (min-width: 600px) {
+  .quick-session-card {
+    margin-left: -2rem;
+    margin-right: -2rem;
+  }
 }
 
 /* Section labels — uppercase, small, spaced */
@@ -2102,8 +2111,8 @@ input[type='range'] {
 
 /* ── Quick method 2×2 grid ───────────────────────────────────────────────── */
 .quick-method-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.625rem;
   padding: 0 1.375rem;
   margin-bottom: 1rem;

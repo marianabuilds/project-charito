@@ -9,6 +9,8 @@ import { settingsStore } from '../state/settingsStore';
 import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
 import type { DetoxBlock } from '../state/blockStore';
+import { screenTimeStore } from '../state/screenTimeStore';
+import type { PerAppStat } from '../state/screenTimeStore';
 
 // ── Smart Suggestions ─────────────────────────────────────────────────────
 
@@ -40,10 +42,18 @@ function addDismissed(id: string): void {
   } catch { /* ignore */ }
 }
 
+function fmtMinutes(m: number): string {
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+}
+
 function generateRecommendations(
   mode: 'gentle' | 'strict',
   goals: string[],
   hour: number,
+  topApps: PerAppStat[] = [],
 ): Recommendation[] {
   const isStrict = mode === 'strict';
   const isMorning  = hour >= 6  && hour < 10;
@@ -51,12 +61,24 @@ function generateRecommendations(
   const isEvening  = hour >= 18 && hour < 23;
   const isLunch    = hour >= 12 && hour < 14;
 
+  // Pull real usage data for personalised copy
+  const topApp   = topApps[0];
+  const top2     = topApps[1];
+  const heaviest = topApp
+    ? `${topApp.appName} (${fmtMinutes(topApp.totalMinutes)} today)`
+    : null;
+  const mostOpened = topApps.reduce<PerAppStat | null>(
+    (best, a) => (!best || a.launchCount > best.launchCount ? a : best), null,
+  );
+
   const pool: Recommendation[] = [
     {
       id: 'morning-clarity',
       emoji: '🌅',
       title: 'Morning clarity',
-      reason: 'Starting phone-free builds mental clarity for the whole day.',
+      reason: topApp
+        ? `You've already used ${topApp.appName} ${topApp.launchCount} times. Starting phone-free protects your focus.`
+        : 'Starting phone-free builds mental clarity for the whole day.',
       durationMinutes: isStrict ? 60 : 30,
       label: isStrict ? '60 min' : '30 min',
       autoScheduled: isMorning,
@@ -65,7 +87,9 @@ function generateRecommendations(
       id: 'evening-wind-down',
       emoji: '🌙',
       title: 'Evening wind-down',
-      reason: 'Phones before bed reduce deep sleep by up to 30%.',
+      reason: heaviest
+        ? `You spent ${fmtMinutes(topApp!.totalMinutes)} on ${topApp!.appName} today. Phones before bed cut deep sleep by 30%.`
+        : 'Phones before bed reduce deep sleep by up to 30%.',
       durationMinutes: isStrict ? 90 : 60,
       label: isStrict ? '90 min' : '60 min',
       autoScheduled: isEvening,
@@ -74,7 +98,9 @@ function generateRecommendations(
       id: 'deep-focus',
       emoji: '🧠',
       title: 'Deep focus block',
-      reason: 'Every notification costs 23 minutes of concentration.',
+      reason: mostOpened
+        ? `You opened ${mostOpened.appName} ${mostOpened.launchCount}× today. Each switch costs 23 min of focus.`
+        : 'Every notification costs 23 minutes of concentration.',
       durationMinutes: isStrict ? 90 : 45,
       label: isStrict ? '90 min' : '45 min',
       autoScheduled: isAfternoon,
@@ -83,7 +109,9 @@ function generateRecommendations(
       id: 'social-pause',
       emoji: '📵',
       title: 'Social media pause',
-      reason: 'A short break from social feeds lowers cortisol levels.',
+      reason: top2
+        ? `${topApp?.appName ?? 'Your top app'} + ${top2.appName} = ${fmtMinutes((topApp?.totalMinutes ?? 0) + top2.totalMinutes)} today. A short break helps.`
+        : 'A short break from social feeds lowers cortisol levels.',
       durationMinutes: isStrict ? 60 : 30,
       label: isStrict ? '60 min' : '30 min',
       autoScheduled: false,
@@ -92,7 +120,9 @@ function generateRecommendations(
       id: 'mindful-lunch',
       emoji: '🍃',
       title: 'Mindful lunch',
-      reason: 'Eating without screens improves digestion and reduces stress.',
+      reason: topApp
+        ? `You've checked ${topApp.appName} ${topApp.launchCount}× — give your eyes a real break over lunch.`
+        : 'Eating without screens improves digestion and reduces stress.',
       durationMinutes: 20,
       label: '20 min',
       autoScheduled: isLunch,
@@ -101,7 +131,9 @@ function generateRecommendations(
       id: 'presence-break',
       emoji: '☀️',
       title: 'Presence break',
-      reason: 'Step away for a while — your mind will thank you.',
+      reason: topApp
+        ? `${fmtMinutes(topApp.totalMinutes)} on ${topApp.appName} today — step away, even for 20 min.`
+        : 'Step away for a while — your mind will thank you.',
       durationMinutes: isStrict ? 45 : 20,
       label: isStrict ? '45 min' : '20 min',
       autoScheduled: false,
@@ -155,10 +187,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
   const [msgIndex, setMsgIndex] = React.useState(0);
   const [msgVisible, setMsgVisible] = React.useState(true);
 
-  // Smart suggestions — recomputed once per mount (hour-granular)
+  // Smart suggestions — seeded with real usage data, recomputed once per mount
+  const topApps = screenTimeStore.getTopApps(5);
   const [suggestions, setSuggestions] = React.useState<Recommendation[]>(() => {
     const s = settingsStore.get();
-    return generateRecommendations(s.mode, s.goals, new Date().getHours());
+    return generateRecommendations(s.mode, s.goals, new Date().getHours(), topApps);
   });
 
   const handleSkipSuggestion = (id: string) => {
@@ -168,7 +201,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
       // If we now have fewer than 3, try to backfill from the full pool
       if (filtered.length < 3) {
         const s = settingsStore.get();
-        return generateRecommendations(s.mode, s.goals, new Date().getHours());
+        return generateRecommendations(s.mode, s.goals, new Date().getHours(), topApps);
       }
       return filtered;
     });
@@ -278,22 +311,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
         )}
       </header>
 
-      <section aria-label="Active session">
-        <SessionView />
-      </section>
-
-      <section aria-label="This week" className="card">
-        <WeekStrip onDaySelect={() => {}} />
-        <p className="week-strip-desc">Tap a day to see your scheduled detox blocks.</p>
-        <button
-          type="button"
-          className="week-strip-cta"
-          onClick={onNavigateToBlocks}
-        >
-          ＋ Schedule a block
-        </button>
-      </section>
-
       {/* Smart suggestions strip — top 3 AI-ranked recommendations */}
       {suggestions.length > 0 && (
         <section aria-label="Smart suggestions">
@@ -343,6 +360,22 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
           </div>
         </section>
       )}
+
+      <section aria-label="Active session">
+        <SessionView />
+      </section>
+
+      <section aria-label="This week" className="card">
+        <WeekStrip onDaySelect={() => {}} />
+        <p className="week-strip-desc">Tap a day to see your scheduled detox blocks.</p>
+        <button
+          type="button"
+          className="week-strip-cta"
+          onClick={onNavigateToBlocks}
+        >
+          ＋ Schedule a block
+        </button>
+      </section>
     </div>
   );
 };

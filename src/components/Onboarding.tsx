@@ -79,6 +79,7 @@ export const Onboarding: React.FC = () => {
     return 'idle';
   });
   const [appUsageStatus, setAppUsageStatus] = React.useState<'idle' | 'coming-soon'>('idle');
+  const [accessibilityStatus, setAccessibilityStatus] = React.useState<'idle' | 'opened'>('idle');
   const [micStatus, setMicStatus] = React.useState<MicStatus>('idle');
 
   const dismiss = () => { markOnboarded(); setVisible(false); };
@@ -104,6 +105,19 @@ export const Onboarding: React.FC = () => {
   const handleAppUsage = () => {
     alert('App usage access requires native app permissions. This feature is coming in the mobile app.');
     setAppUsageStatus('coming-soon');
+  };
+
+  const handleAccessibilityPermission = async () => {
+    try {
+      // Dynamically import so the plugin is only loaded on Android
+      const { AppBlocker } = await import('../plugins/AppBlocker');
+      await AppBlocker.openAccessibilitySettings();
+      setAccessibilityStatus('opened');
+    } catch {
+      // On web or iOS, inform the user this is Android-only
+      alert('App blocking via Accessibility Service is available in the Android app. Enable it in Settings \u2192 Accessibility \u2192 Charito after installing the app.');
+      setAccessibilityStatus('opened');
+    }
   };
 
   const handleMic = async () => {
@@ -385,6 +399,24 @@ export const Onboarding: React.FC = () => {
                   {appUsageStatus === 'coming-soon'
                     ? <span style={{ fontSize: '0.7rem', color: 'var(--text-m)' }}>Coming in app</span>
                     : 'Allow \u2192'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="onboarding-permission-row"
+                onClick={() => void handleAccessibilityPermission()}
+                disabled={accessibilityStatus === 'opened'}
+              >
+                <span className="onboarding-permission-icon" aria-hidden="true">&#128274;</span>
+                <div className="onboarding-permission-text">
+                  <span className="onboarding-permission-title">App blocking</span>
+                  <span className="onboarding-permission-desc">Block apps when a detox session is active — requires Accessibility access</span>
+                </div>
+                <span className="onboarding-permission-action">
+                  {accessibilityStatus === 'opened'
+                    ? <span style={{ fontSize: '0.7rem', color: 'var(--text-m)' }}>Opened &#8250;</span>
+                    : 'Enable \u2192'}
                 </span>
               </button>
 

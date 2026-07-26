@@ -1,9 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import type { DetoxSettings } from '../types/settings';
 import { getBodyCueMessage } from '../utils/bodyCues';
+import { AppBlocker } from '../plugins/AppBlocker';
+
+// ── App-name → Android package-name lookup ────────────────────────────────
+// Used to resolve the human-readable app names stored in SessionView/blockStore
+// into the package names required by AppBlockerService.
+const APP_PACKAGE_MAP: Record<string, string> = {
+  'Instagram':    'com.instagram.android',
+  'TikTok':       'com.zhiliaoapp.musically',
+  'Twitter/X':    'com.twitter.android',
+  'Facebook':     'com.facebook.katana',
+  'Snapchat':     'com.snapchat.android',
+  'Reddit':       'com.reddit.frontpage',
+  'LinkedIn':     'com.linkedin.android',
+  'YouTube':      'com.google.android.youtube',
+  'Netflix':      'com.netflix.mediaclient',
+  'Spotify':      'com.spotify.music',
+  'Twitch':       'tv.twitch.android.app',
+  'WhatsApp':     'com.whatsapp',
+  'Telegram':     'org.telegram.messenger',
+  'iMessage':     'com.apple.MobileSMS', // iOS only — will silently not match on Android
+  'Discord':      'com.discord',
+  'Safari/Chrome':'com.android.chrome',
+  'Games':        '', // no single package — omit
+};
+
+function resolvePackages(appNames: string[]): string[] {
+  return appNames
+    .map((name) => APP_PACKAGE_MAP[name] ?? '')
+    .filter((pkg) => pkg.length > 0);
+}
+
+const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'completed';
 
@@ -92,14 +125,25 @@ export function useDetoxSession() {
     clearTimer,
   ]);
 
-  const start = useCallback(() => {
+  const start = useCallback((selectedApps: string[] = []) => {
     if (status === 'running') return;
     setStatus('running');
     setElapsedSeconds(0);
     setCurrentMessageText(null);
     clearTimer();
     intervalRef.current = window.setInterval(tick, 1000);
-  }, [status, clearTimer, tick]);
+
+    // On Android: activate the Accessibility Service app blocker
+    if (isAndroid && selectedApps.length > 0) {
+      const packages = resolvePackages(selectedApps);
+      if (packages.length > 0) {
+        const blockEndEpochMs = Date.now() + settings.durationMinutes * 60 * 1000;
+        void AppBlocker.startBlocking({ packages, blockEndEpochMs }).catch(() => {
+          // Silently swallow — if the service isn't enabled, blocking just won't happen
+        });
+      }
+    }
+  }, [status, clearTimer, tick, settings.durationMinutes]);
 
   const pause = useCallback(() => {
     if (status !== 'running') return;
@@ -119,6 +163,10 @@ export function useDetoxSession() {
     setElapsedSeconds(0);
     setCurrentMessageText(null);
     clearTimer();
+    // Ensure blocking is deactivated whenever a session ends or is cancelled
+    if (isAndroid) {
+      void AppBlocker.stopBlocking().catch(() => { /* ignore */ });
+    }
   }, [clearTimer]);
 
   useEffect(() => {

@@ -198,7 +198,8 @@ export const SessionView: React.FC = () => {
     if (quickMethod === null) return;
     settingsStore.set({ durationMinutes: quickDuration });
     settingsStore.set({ selectedMessageId: quickMessageId || null });
-    start();
+    // Pass selected apps so useDetoxSession can activate Android app blocking
+    start(quickAllAppsSelected ? [] : quickSelectedApps);
     toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
 
