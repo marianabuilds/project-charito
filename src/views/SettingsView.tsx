@@ -337,7 +337,7 @@ const BlockExceptionsSection: React.FC = () => {
     persist(next);
   };
 
-  const quickIds = new Set(BLOCK_EXCEPTION_OPTIONS.map((o) => o.id));
+  const quickIds = new Set<string>(BLOCK_EXCEPTION_OPTIONS.map((o) => o.id));
   const extraExceptions = exceptions.filter((id) => id !== 'Phone' && !quickIds.has(id));
 
   return (
