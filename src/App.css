@@ -1,15 +1,31 @@
 /* ── App shell ───────────────────────────────────────────────────────────── */
+/* Android WebView: pin shell to dvh so the tab bar stays viewport-fixed. */
 .app-root {
-  min-height: 100svh;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  padding-bottom: 4.5rem;
+  overflow: hidden;
+}
+
+/* Scrollable main content — tab bar stays fixed; content scrolls underneath. */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* Clear fixed tab bar + Android gesture / home-indicator inset. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── View wrapper ────────────────────────────────────────────────────────── */
 .view {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -91,7 +107,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 4rem;
+  min-height: 4rem;
+  height: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--surface);
   border-top: 1px solid var(--border);
   display: flex;
@@ -2542,33 +2560,53 @@ input[type='range'] {
 .permissions-confirm-btn--danger:hover { background: var(--accent-dim); }
 
 /* ── Onboarding overlay ───────────────────────────────────────────────────── */
+/* Android WebView: fill viewport with dvh; inner screen scrolls independently. */
 .onboarding-overlay {
   position: fixed;
   inset: 0;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   background: var(--bg, #faf8f4);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
   z-index: 100;
+  overflow: hidden;
 }
 
 .onboarding-container {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   max-width: 26rem;
   width: 100%;
-  gap: 2rem;
+  margin: 0 auto;
+  gap: 1.25rem;
+  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
 }
 
 .onboarding-screen {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 1.25rem;
-  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* Prefer vertical pan so horizontal swipe nav still works via JS thresholds. */
+  touch-action: pan-y;
+  padding-bottom: 0.5rem;
 }
 
 .onboarding-icon-wrap {
@@ -2618,6 +2656,8 @@ input[type='range'] {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-shrink: 0;
+  padding-top: 0.25rem;
 }
 
 .onboarding-dot {
@@ -3125,7 +3165,7 @@ input[type='range'] {
 /* ── Toast banner ─────────────────────────────────────────────────────────── */
 .toast-banner {
   position: fixed;
-  bottom: 4.75rem; /* above the 4rem tab bar + small gap */
+  bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)); /* above tab bar + safe area */
   left: 50%;
   transform: translateX(-50%);
   background: #5a7a5a;
@@ -3366,7 +3406,7 @@ input[type='range'] {
   align-items: flex-end;
   justify-content: center;
   z-index: 150;
-  padding: 0 0 4.5rem;
+  padding: 0 0 calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 480px) {

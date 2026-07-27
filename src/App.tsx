@@ -36,20 +36,22 @@ export const App: React.FC = () => {
   return (
     <SessionProvider>
       <div className="app-root">
-        <React.Suspense fallback={<div className="view" />}>
-          {view === 'home' && <HomeView onNavigateToBlocks={navigateToBlocks} />}
-          {view === 'blocks' && (
-            <BlocksView
-              prefill={blockPrefill}
-              onPrefillConsumed={() => setBlockPrefill(undefined)}
-            />
-          )}
-          {view === 'insights' && (
-            <InsightsView onNavigateToBlocks={navigateToBlocks} />
-          )}
-          {view === 'settings' && <SettingsView />}
-          {view === 'rewards' && <RewardsView />}
-        </React.Suspense>
+        <main className="app-main">
+          <React.Suspense fallback={<div className="view" />}>
+            {view === 'home' && <HomeView onNavigateToBlocks={navigateToBlocks} />}
+            {view === 'blocks' && (
+              <BlocksView
+                prefill={blockPrefill}
+                onPrefillConsumed={() => setBlockPrefill(undefined)}
+              />
+            )}
+            {view === 'insights' && (
+              <InsightsView onNavigateToBlocks={navigateToBlocks} />
+            )}
+            {view === 'settings' && <SettingsView />}
+            {view === 'rewards' && <RewardsView />}
+          </React.Suspense>
+        </main>
         <TabBar active={view} onChange={setView} />
         <Onboarding />
         <Toast />

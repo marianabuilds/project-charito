@@ -47,15 +47,30 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Android WebView: prefer dvh / fill-available over 100vh (address-bar / inset bugs). */
+  height: 100%;
+  height: -webkit-fill-available;
+  height: 100dvh;
+}
+
 body {
   margin: 0;
   background: var(--bg);
+  height: 100%;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 #root {
-  min-height: 100svh;
+  height: 100%;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 h1, h2, h3 {
