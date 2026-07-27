@@ -100,4 +100,7 @@
     <!-- Keep CPU awake briefly while handling alarm receivers -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Custom voice reminders (getUserMedia / MediaRecorder) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
 </manifest>

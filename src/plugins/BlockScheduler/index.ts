@@ -21,6 +21,8 @@ export interface BlockSchedulerPlugin {
   clearSchedules(): Promise<void>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   hasNotificationPermission(): Promise<{ granted: boolean }>;
+  /** Opens the system notification settings screen for Charito. */
+  openNotificationSettings(): Promise<void>;
   hasExactAlarmPermission(): Promise<{ granted: boolean }>;
   openExactAlarmSettings(): Promise<void>;
 }

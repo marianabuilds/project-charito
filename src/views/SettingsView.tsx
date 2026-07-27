@@ -1,10 +1,28 @@
 import React from 'react';
 import { CultureSelector } from '../components/CultureSelector';
-import { ModeToggle } from '../components/ModeToggle';
+import { VoiceActorSelector } from '../components/VoiceActorSelector';
 import { MessageSelector } from '../components/MessageSelector';
 import { planStore } from '../state/planStore';
 import type { Plan } from '../state/planStore';
 import { settingsStore } from '../state/settingsStore';
+import { APP_PACKAGE_MAP, BLOCK_EXCEPTION_OPTIONS, hasException } from '../utils/appPackages';
+import { ExceptionAppsSheet } from '../components/ExceptionAppsSheet';
+import { BlockedScreenPreviewSheet } from '../components/BlockedScreenPreviewSheet';
+
+function exceptionLabel(id: string): string {
+  if (APP_PACKAGE_MAP[id]) return id;
+  const named = Object.entries(APP_PACKAGE_MAP).find(([, pkg]) => pkg === id)?.[0];
+  if (named) return named;
+  const segment = id.includes('.') ? id.split('.').pop() : id;
+  return segment ? segment.charAt(0).toUpperCase() + segment.slice(1) : id;
+}
+import {
+  onAppBecameVisible,
+  refreshAndroidPermissions,
+  requestAndroidPermission,
+  type AndroidPermissionStatuses,
+  type PermState,
+} from '../utils/androidPermissions';
 
 const StatsCard: React.FC = () => (
   <div className="stats-card card">
@@ -20,126 +38,90 @@ const StatsCard: React.FC = () => (
   </div>
 );
 
-type NotifStatus = 'idle' | 'granted' | 'denied' | 'unsupported';
-
 const PermissionsSection: React.FC = () => {
-  const [notifStatus, setNotifStatus] = React.useState<NotifStatus>(() => {
-    if (!('Notification' in window)) return 'unsupported';
-    if (Notification.permission === 'granted') return 'granted';
-    if (Notification.permission === 'denied') return 'denied';
-    return 'idle';
+  const [perms, setPerms] = React.useState<AndroidPermissionStatuses>({
+    notifications: 'idle',
+    usage: 'idle',
+    accessibility: 'idle',
+    overlay: 'idle',
+    microphone: 'idle',
   });
-
-  const [audioStatus, setAudioStatus] = React.useState<'idle' | 'available' | 'unavailable'>(() => {
-    if (!('speechSynthesis' in window)) return 'unavailable';
-    return 'idle';
-  });
-
   const [dataConfirm, setDataConfirm] = React.useState(false);
   const [dataCleared, setDataCleared] = React.useState(false);
+  const [busy, setBusy] = React.useState<keyof AndroidPermissionStatuses | null>(null);
 
-  const handleNotifClick = async () => {
-    if (!('Notification' in window)) {
-      setNotifStatus('unsupported');
-      return;
+  const sync = React.useCallback(() => {
+    void refreshAndroidPermissions().then(setPerms);
+  }, []);
+
+  React.useEffect(() => {
+    sync();
+    return onAppBecameVisible(sync);
+  }, [sync]);
+
+  const handlePerm = async (kind: keyof AndroidPermissionStatuses) => {
+    if (perms[kind] === 'granted' || busy) return;
+    setBusy(kind);
+    try {
+      const next = await requestAndroidPermission(kind);
+      setPerms((prev) => ({ ...prev, [kind]: next }));
+    } finally {
+      setBusy(null);
     }
-    if (Notification.permission === 'granted') {
-      setNotifStatus('granted');
-      return;
-    }
-    const result = await Notification.requestPermission();
-    if (result === 'granted') setNotifStatus('granted');
-    else setNotifStatus('denied');
   };
 
-  const handleAudioClick = () => {
-    if (!('speechSynthesis' in window)) {
-      setAudioStatus('unavailable');
-      return;
+  const badge = (status: PermState) => {
+    if (status === 'granted') {
+      return <span className="permissions-badge permissions-badge--on">Enabled</span>;
     }
-    const voices = window.speechSynthesis.getVoices();
-    setAudioStatus(voices.length > 0 ? 'available' : 'unavailable');
+    if (status === 'denied') {
+      return <span className="permissions-badge permissions-badge--off">Open Settings ↗</span>;
+    }
+    if (status === 'unsupported') {
+      return <span className="permissions-badge permissions-badge--muted">Not supported</span>;
+    }
+    return <span className="permissions-arrow">›</span>;
   };
 
   const handleClearData = () => {
     localStorage.clear();
     setDataCleared(true);
     setDataConfirm(false);
-    // Reload to reset app state
     setTimeout(() => window.location.reload(), 800);
   };
+
+  const rows: { key: keyof AndroidPermissionStatuses; label: string; desc: string }[] = [
+    { key: 'notifications', label: 'Notifications', desc: 'Allow reminders to reach you' },
+    { key: 'usage', label: 'App usage data', desc: 'Smarter block suggestions from screen time' },
+    { key: 'accessibility', label: 'App blocking', desc: 'Accessibility — pause apps during a detox' },
+    { key: 'overlay', label: 'Display over apps', desc: 'Show the blocked-app screen on top' },
+    { key: 'microphone', label: 'Microphone', desc: 'Record your own voice reminders' },
+  ];
 
   return (
     <div className="permissions-section">
       <p className="permissions-section-title">PERMISSIONS</p>
 
-      {/* Notifications row */}
-      <div
-        className="permissions-row"
-        role="button"
-        tabIndex={0}
-        onClick={() => void handleNotifClick()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') void handleNotifClick();
-        }}
-        aria-label="Notifications permission"
-      >
-        <div className="permissions-row-left">
-          <span className="permissions-row-label">Notifications</span>
-          <span className="permissions-row-desc">Allow reminders to reach you</span>
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          className="permissions-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => void handlePerm(row.key)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') void handlePerm(row.key);
+          }}
+          aria-label={`${row.label} permission`}
+        >
+          <div className="permissions-row-left">
+            <span className="permissions-row-label">{row.label}</span>
+            <span className="permissions-row-desc">{row.desc}</span>
+          </div>
+          <div className="permissions-row-right">{badge(perms[row.key])}</div>
         </div>
-        <div className="permissions-row-right">
-          {notifStatus === 'granted' && (
-            <span className="permissions-badge permissions-badge--on">Enabled</span>
-          )}
-          {notifStatus === 'denied' && (
-            <span className="permissions-badge permissions-badge--off">
-              Open Settings ↗
-            </span>
-          )}
-          {notifStatus === 'unsupported' && (
-            <span className="permissions-badge permissions-badge--muted">Not supported</span>
-          )}
-          {notifStatus === 'idle' && (
-            <span className="permissions-arrow">›</span>
-          )}
-        </div>
-      </div>
-      {notifStatus === 'denied' && (
-        <p className="permissions-hint">
-          Tap to enable in your browser or device settings.
-        </p>
-      )}
+      ))}
 
-      {/* Voice & audio row */}
-      <div
-        className="permissions-row"
-        role="button"
-        tabIndex={0}
-        onClick={handleAudioClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') handleAudioClick();
-        }}
-        aria-label="Voice and audio permission"
-      >
-        <div className="permissions-row-left">
-          <span className="permissions-row-label">Voice &amp; audio</span>
-          <span className="permissions-row-desc">Enable spoken reminders</span>
-        </div>
-        <div className="permissions-row-right">
-          {audioStatus === 'available' && (
-            <span className="permissions-badge permissions-badge--on">Available</span>
-          )}
-          {audioStatus === 'unavailable' && (
-            <span className="permissions-badge permissions-badge--off">Not available in this browser</span>
-          )}
-          {audioStatus === 'idle' && (
-            <span className="permissions-arrow">›</span>
-          )}
-        </div>
-      </div>
-
-      {/* Data & storage row */}
       <div className="permissions-row permissions-row--data">
         {!dataConfirm && !dataCleared ? (
           <>
@@ -329,6 +311,133 @@ const BillingSection: React.FC = () => {
 
 const PRE_BLOCK_OPTIONS = [0, 5, 10, 15] as const;
 
+const BlockExceptionsSection: React.FC = () => {
+  const [exceptions, setExceptions] = React.useState<string[]>(
+    () => settingsStore.get().blockExceptions ?? ['Phone', 'Messages'],
+  );
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    return settingsStore.subscribe((s) => {
+      setExceptions(s.blockExceptions ?? ['Phone', 'Messages']);
+    });
+  }, []);
+
+  const persist = (next: string[]) => {
+    const withPhone = Array.from(new Set(['Phone', ...next]));
+    setExceptions(withPhone);
+    settingsStore.set({ blockExceptions: withPhone });
+  };
+
+  const toggle = (id: string, locked: boolean) => {
+    if (locked) return;
+    const next = hasException(exceptions, id)
+      ? exceptions.filter((x) => x !== id)
+      : [...exceptions, id];
+    persist(next);
+  };
+
+  const quickIds = new Set(BLOCK_EXCEPTION_OPTIONS.map((o) => o.id));
+  const extraExceptions = exceptions.filter((id) => id !== 'Phone' && !quickIds.has(id));
+
+  return (
+    <div className="settings-field" style={{ marginTop: '1.25rem' }}>
+      <p className="block-form-label">Block exceptions</p>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.25rem 0 0.75rem' }}>
+        These apps stay available during every Quick detox and scheduled block.
+        Phone is always on.
+      </p>
+      <div className="block-exceptions-list">
+        {BLOCK_EXCEPTION_OPTIONS.map((opt) => {
+          const checked = opt.locked || hasException(exceptions, opt.id);
+          return (
+            <label
+              key={opt.id}
+              className={`block-exception-row${opt.locked ? ' block-exception-row--locked' : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={opt.locked}
+                onChange={() => toggle(opt.id, opt.locked)}
+              />
+              <span className="block-exception-text">
+                <span className="block-exception-name">{opt.label}</span>
+                <span className="block-exception-hint">{opt.hint}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
+      {extraExceptions.length > 0 && (
+        <ul className="block-exception-extras">
+          {extraExceptions.map((id) => (
+            <li key={id} className="block-exception-chip">
+              <span>{exceptionLabel(id)}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${exceptionLabel(id)}`}
+                onClick={() => persist(exceptions.filter((x) => x !== id))}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button
+        type="button"
+        className="block-exceptions-browse"
+        onClick={() => setSheetOpen(true)}
+      >
+        Browse all apps →
+      </button>
+
+      <ExceptionAppsSheet
+        open={sheetOpen}
+        selected={exceptions}
+        onClose={() => setSheetOpen(false)}
+        onChange={persist}
+      />
+    </div>
+  );
+};
+
+const BlockedScreenSection: React.FC = () => {
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  return (
+    <>
+      <div className="permissions-section">
+        <p className="permissions-section-title">BLOCKED SCREEN</p>
+        <div
+          className="permissions-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => setSheetOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setSheetOpen(true);
+          }}
+          aria-label="Preview blocked screen"
+        >
+          <div className="permissions-row-left">
+            <span className="permissions-row-label">Preview blocked screen</span>
+            <span className="permissions-row-desc">
+              See the full-screen overlay other apps get — uses your reminder &amp; voice
+            </span>
+          </div>
+          <div className="permissions-row-right">
+            <span className="permissions-arrow">›</span>
+          </div>
+        </div>
+      </div>
+      <BlockedScreenPreviewSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+    </>
+  );
+};
+
 export const SettingsView: React.FC = () => {
   const [preBlockMins, setPreBlockMins] = React.useState(
     () => settingsStore.get().preBlockReminderMinutes ?? 10,
@@ -353,7 +462,7 @@ export const SettingsView: React.FC = () => {
         <p className="app-badge">Settings</p>
         <h1 className="app-title">Your preferences</h1>
         <p className="app-subtitle">
-          Choose your culture, reminder style, and the phrases Charito will speak.
+          Choose your culture, voice, and the phrases Charito will speak.
         </p>
       </header>
 
@@ -361,8 +470,9 @@ export const SettingsView: React.FC = () => {
 
       <div className="settings-form card">
         <CultureSelector />
-        <ModeToggle />
+        <VoiceActorSelector />
         <MessageSelector />
+        <BlockExceptionsSection />
 
         <div className="settings-field" style={{ marginTop: '1.25rem' }}>
           <label className="block-form-label" htmlFor="pre-block-reminder">
@@ -389,6 +499,8 @@ export const SettingsView: React.FC = () => {
           </select>
         </div>
       </div>
+
+      <BlockedScreenSection />
 
       <PermissionsSection />
 

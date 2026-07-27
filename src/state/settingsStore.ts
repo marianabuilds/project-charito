@@ -1,5 +1,6 @@
 import type { DetoxSettings } from '../types/settings';
 import { culturalPresets } from '../data/culturalPresets';
+import { DEFAULT_VOICE_ACTOR_ID } from '../data/voiceActors';
 
 const STORAGE_KEY = 'cultural-detox:settings:v1';
 
@@ -10,11 +11,13 @@ function getDefaultSettings(): DetoxSettings {
     cultureCode: defaultPreset.cultureCode,
     languageCode: defaultPreset.languageCode,
     mode: 'gentle',
+    voiceActorId: DEFAULT_VOICE_ACTOR_ID,
     selectedMessageId: null,
     customMessages: [],
     userName: '',
     goals: [],
     preBlockReminderMinutes: 10,
+    blockExceptions: ['Phone', 'Messages'],
   };
 }
 
@@ -42,12 +45,23 @@ function loadSettings(): DetoxSettings {
       ...(typeof parsed.cultureCode === 'string' ? { cultureCode: parsed.cultureCode } : {}),
       ...(typeof parsed.languageCode === 'string' ? { languageCode: parsed.languageCode } : {}),
       ...(parsed.mode === 'gentle' || parsed.mode === 'strict' ? { mode: parsed.mode } : {}),
+      ...(typeof parsed.voiceActorId === 'string' ? { voiceActorId: parsed.voiceActorId } : {}),
       selectedMessageId,
       ...(Array.isArray(parsed.customMessages) ? { customMessages: parsed.customMessages } : {}),
       ...(typeof parsed.userName === 'string' ? { userName: parsed.userName } : {}),
       ...(Array.isArray(parsed.goals) ? { goals: parsed.goals as string[] } : {}),
       ...(typeof parsed.preBlockReminderMinutes === 'number'
         ? { preBlockReminderMinutes: parsed.preBlockReminderMinutes }
+        : {}),
+      ...(Array.isArray(parsed.blockExceptions)
+        ? {
+            blockExceptions: Array.from(
+              new Set([
+                'Phone',
+                ...(parsed.blockExceptions as string[]).filter((x) => typeof x === 'string'),
+              ]),
+            ),
+          }
         : {}),
     };
   } catch {

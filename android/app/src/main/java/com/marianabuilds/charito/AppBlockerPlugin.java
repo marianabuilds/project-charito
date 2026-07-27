@@ -1,5 +1,6 @@
 package com.marianabuilds.charito;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -13,12 +14,16 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 
+import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +40,12 @@ import java.util.Set;
  *   stopBlocking()                                                  → void
  *   hasAccessibilityPermission()                                    → { granted: boolean }
  *   openAccessibilitySettings()                                     → void
+ *   hasOverlayPermission()                                          → { granted: boolean }
+ *   openOverlaySettings()                                           → void
+ *   hasMicrophonePermission()                                       → { granted, denied? }
+ *   requestMicrophonePermission()                                   → { granted, denied? }
+ *   openAppSettings()                                               → void
+ *   previewBlockedScreen({ reminderText?, appName? })               → void
  *
  * The plugin writes the active blocked-packages list into SharedPreferences so
  * AppBlockerService can read it without needing a bound-service connection.
@@ -42,7 +53,15 @@ import java.util.Set;
  * A BroadcastReceiver listens for ACTION_BREAK_BLOCK events from BlockedOverlayActivity
  * and forwards them to JS as a "breakBlock" plugin event.
  */
-@CapacitorPlugin(name = "AppBlocker")
+@CapacitorPlugin(
+        name = "AppBlocker",
+        permissions = {
+                @Permission(
+                        alias = "microphone",
+                        strings = { Manifest.permission.RECORD_AUDIO }
+                )
+        }
+)
 public class AppBlockerPlugin extends Plugin {
 
     /** Dialer / phone packages that must never be blocked. */
@@ -112,13 +131,15 @@ public class AppBlockerPlugin extends Plugin {
             return;
         }
 
+        String selfPkg = getContext().getPackageName();
         Set<String> pkgSet = new HashSet<>();
         try {
             for (int i = 0; i < packages.length(); i++) {
                 String pkg = packages.getString(i);
-                if (pkg != null && !pkg.isEmpty() && !PHONE_PACKAGES.contains(pkg)) {
-                    pkgSet.add(pkg);
-                }
+                if (pkg == null || pkg.isEmpty()) continue;
+                // Never block Phone/Dialer or Charito itself — users must manage detox in-app.
+                if (PHONE_PACKAGES.contains(pkg) || pkg.equals(selfPkg)) continue;
+                pkgSet.add(pkg);
             }
         } catch (Exception e) {
             call.reject("Failed to parse packages: " + e.getMessage());
@@ -126,7 +147,7 @@ public class AppBlockerPlugin extends Plugin {
         }
 
         if (pkgSet.isEmpty()) {
-            call.reject("No blockable packages after excluding Phone/Dialer");
+            call.reject("No blockable packages after excluding Phone/Dialer and Charito");
             return;
         }
 
@@ -218,6 +239,77 @@ public class AppBlockerPlugin extends Plugin {
     }
 
     /**
+     * Returns whether RECORD_AUDIO is granted.
+     */
+    @PluginMethod
+    public void hasMicrophonePermission(PluginCall call) {
+        call.resolve(micPermissionResult());
+    }
+
+    /**
+     * Requests RECORD_AUDIO via the system runtime dialog.
+     */
+    @PluginMethod
+    public void requestMicrophonePermission(PluginCall call) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED) {
+            call.resolve(micPermissionResult());
+            return;
+        }
+        requestPermissionForAlias("microphone", call, "micPermCallback");
+    }
+
+    @PermissionCallback
+    private void micPermCallback(PluginCall call) {
+        call.resolve(micPermissionResultAfterRequest());
+    }
+
+    /**
+     * Opens Charito's application details settings (for permanently denied mic, etc.).
+     */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    /**
+     * Opens BlockedOverlayActivity in dismissible preview mode so Settings can
+     * show the native full-screen blocked-app experience without starting a live block.
+     *
+     * Call options:
+     *   reminderText — optional spoken / quoted reminder (defaults to a gentle line)
+     *   appName      — optional sample app label (defaults to "Instagram")
+     */
+    @PluginMethod
+    public void previewBlockedScreen(PluginCall call) {
+        String reminderText = call.getString("reminderText", "");
+        String appName = call.getString("appName", "Instagram");
+
+        Intent overlay = new Intent(getContext(), BlockedOverlayActivity.class);
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_APP_NAME,
+                appName != null && !appName.isEmpty() ? appName : "Instagram");
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_PACKAGE_NAME, "preview.demo");
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_BLOCK_END_MS, 0L);
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_REMINDER_TEXT,
+                reminderText != null ? reminderText : "");
+        overlay.putExtra(BlockedOverlayActivity.EXTRA_PREVIEW, true);
+        overlay.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        getContext().startActivity(overlay);
+        call.resolve();
+    }
+
+    /**
      * Returns launcher apps installed on the device (for the app picker UI).
      * Phone/dialer packages and Charito itself are excluded.
      *
@@ -273,6 +365,27 @@ public class AppBlockerPlugin extends Plugin {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private JSObject micPermissionResult() {
+        boolean granted = ContextCompat.checkSelfPermission(
+                getContext(), Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+        JSObject result = new JSObject();
+        result.put("granted", granted);
+        // "denied" means permanently refused — only set after an explicit request callback.
+        result.put("denied", false);
+        return result;
+    }
+
+    private JSObject micPermissionResultAfterRequest() {
+        boolean granted = ContextCompat.checkSelfPermission(
+                getContext(), Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+        JSObject result = new JSObject();
+        result.put("granted", granted);
+        result.put("denied", !granted);
+        return result;
+    }
 
     /**
      * Checks the secure settings string "enabled_accessibility_services" for our

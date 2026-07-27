@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isSupported, speak } from './audioEngine';
 
+vi.mock('../state/settingsStore', () => ({
+  settingsStore: {
+    get: () => ({
+      voiceActorId: 'sofia',
+      languageCode: 'es-PE',
+    }),
+  },
+}));
+
 describe('audioEngine', () => {
   beforeEach(() => {
     function MockUtterance(this: { lang: string; onend: (() => void) | null; onerror: ((e: unknown) => void) | null; text: string }, text: string) {
@@ -17,6 +26,9 @@ describe('audioEngine', () => {
         Promise.resolve().then(() => utterance.onend?.());
       }),
       cancel: vi.fn(),
+      getVoices: vi.fn(() => []),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
     });
   });
 

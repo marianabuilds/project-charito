@@ -6,7 +6,7 @@ import { speak } from '../services/audioEngine';
 import type { DetoxSettings } from '../types/settings';
 import { getBodyCueMessage } from '../utils/bodyCues';
 import { AppBlocker } from '../plugins/AppBlocker';
-import { APP_PACKAGE_MAP, resolvePackages } from '../utils/appPackages';
+import { APP_PACKAGE_MAP, filterBlockedPackages, resolvePackages } from '../utils/appPackages';
 
 const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
@@ -116,10 +116,19 @@ export function useDetoxSession() {
 
   const activateAppBlocking = useCallback(async (selectedApps: string[], reminderText: string | null) => {
     if (!isAndroid) return;
-    // Empty selectedApps = block all known mapped apps (never includes Phone)
-    const pkgs = resolvePackages(
-      selectedApps.length > 0 ? selectedApps : Object.keys(APP_PACKAGE_MAP),
-    );
+    const exceptions = settings.blockExceptions ?? ['Phone', 'Messages'];
+    let pkgs: string[];
+    if (selectedApps.length > 0) {
+      pkgs = resolvePackages(selectedApps, exceptions);
+    } else {
+      // Empty selection = block all launcher apps minus Settings exceptions
+      try {
+        const { apps } = await AppBlocker.getInstalledApps();
+        pkgs = filterBlockedPackages(apps.map((a) => a.packageName), exceptions);
+      } catch {
+        pkgs = resolvePackages(Object.keys(APP_PACKAGE_MAP), exceptions);
+      }
+    }
     if (pkgs.length === 0) return;
 
     const blockEndEpochMs = Date.now() + settings.durationMinutes * 60 * 1000;
@@ -128,7 +137,7 @@ export function useDetoxSession() {
       blockEndEpochMs,
       reminderText: reminderText ?? undefined,
     });
-  }, [settings.durationMinutes]);
+  }, [settings.durationMinutes, settings.blockExceptions]);
 
   const start = useCallback((selectedApps: string[] = []) => {
     if (status === 'running') return;

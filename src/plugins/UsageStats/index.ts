@@ -39,6 +39,9 @@ export interface UsageStatsPlugin {
    */
   getUsageStats(options?: GetUsageStatsOptions): Promise<GetUsageStatsResult>;
 
+  /** Returns whether PACKAGE_USAGE_STATS / Usage Access is granted. */
+  hasPermission(): Promise<{ granted: boolean }>;
+
   /**
    * Opens the Android "Usage Access" system settings screen so the user can
    * manually grant the PACKAGE_USAGE_STATS permission.

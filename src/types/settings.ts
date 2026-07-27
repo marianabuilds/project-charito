@@ -12,6 +12,8 @@ export interface DetoxSettings {
   cultureCode: string; // e.g. 'pe_PE'
   languageCode: string; // e.g. 'es-PE'
   mode: DetoxMode;
+  /** Curated voice actor id used for TTS reminders */
+  voiceActorId: string;
   /** ID of the selected message, null = random */
   selectedMessageId: string | null;
   /** Array of custom reminder messages */
@@ -25,6 +27,11 @@ export interface DetoxSettings {
    * Default 10.
    */
   preBlockReminderMinutes: number;
+  /**
+   * Apps that stay available during every detox block (exceptions).
+   * Display names, e.g. ['Phone', 'Messages']. Phone is always kept.
+   */
+  blockExceptions: string[];
 }
 
 export interface CulturalMessage {

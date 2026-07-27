@@ -6,6 +6,7 @@ import { culturalPresets } from '../data/culturalPresets';
 import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
 import { useInstalledApps } from '../hooks/useInstalledApps';
+import { FloatingCta } from './FloatingCta';
 
 // Single-letter day labels: S M T W T F S
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -785,20 +786,15 @@ export const BlockCard: React.FC<BlockCardProps> = ({ prefill, onPrefillConsumed
             </select>
           </div>
 
-          {/* 7. Save / Cancel */}
-          <div className="block-form-actions">
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={handleSave}
-              disabled={!canSave}
-            >
-              Save block
-            </button>
-            <button type="button" className="block-cancel-link" onClick={cancelForm}>
-              Cancel
-            </button>
-          </div>
+          <div className="floating-cta-spacer" aria-hidden="true" />
+          <FloatingCta
+            label="Save block"
+            onClick={handleSave}
+            disabled={!canSave}
+            secondaryLabel="Cancel"
+            onSecondaryClick={cancelForm}
+            ariaLabel="Save block"
+          />
         </div>
       )}
 

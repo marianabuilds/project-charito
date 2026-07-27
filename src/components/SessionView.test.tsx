@@ -9,11 +9,13 @@ vi.mock('../state/settingsStore', () => {
     cultureCode: 'pe_PE',
     languageCode: 'es-PE',
     mode: 'gentle',
+    voiceActorId: 'sofia',
     selectedMessageId: 'pe_oye_compadre',
     customMessages: [],
     userName: '',
     goals: [],
     preBlockReminderMinutes: 10,
+    blockExceptions: ['Phone', 'Messages'],
   };
   return {
     settingsStore: {

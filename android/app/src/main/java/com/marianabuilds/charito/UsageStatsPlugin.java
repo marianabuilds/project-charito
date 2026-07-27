@@ -139,6 +139,16 @@ public class UsageStatsPlugin extends Plugin {
     }
 
     /**
+     * Returns whether Usage Access (PACKAGE_USAGE_STATS) is granted.
+     */
+    @PluginMethod
+    public void hasPermission(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", hasUsagePermission());
+        call.resolve(result);
+    }
+
+    /**
      * Opens the Android "Usage Access" system settings screen so the user can
      * manually grant the PACKAGE_USAGE_STATS permission.
      */

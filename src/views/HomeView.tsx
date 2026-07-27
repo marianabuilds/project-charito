@@ -49,8 +49,6 @@ const ROTATING_MESSAGES = [
   'Presence is the rarest gift you can give yourself.',
 ];
 
-const DID_YOU_KNOW_KEY = 'charito:did-you-know:dismissed';
-
 const DID_YOU_KNOW_FACTS = [
   'The average person unlocks their phone 96 times a day.',
   'Social media is engineered to be as addictive as slot machines.',
@@ -61,9 +59,10 @@ const DID_YOU_KNOW_FACTS = [
 
 interface HomeViewProps {
   onNavigateToBlocks: (prefill?: Partial<DetoxBlock>) => void;
+  onNavigateToSettings?: () => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
+export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks, onNavigateToSettings }) => {
   const session = useSession();
   const { stats, status: usageStatus, openPermissionSettings, refresh } =
     useUsageStats(8);
@@ -117,18 +116,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
     const idx = Math.floor(Math.random() * DID_YOU_KNOW_FACTS.length);
     return DID_YOU_KNOW_FACTS[idx];
   });
-  const [didYouKnowVisible, setDidYouKnowVisible] = React.useState(() => {
-    try {
-      return !sessionStorage.getItem(DID_YOU_KNOW_KEY);
-    } catch {
-      return true;
-    }
-  });
-
-  const dismissDidYouKnow = () => {
-    try { sessionStorage.setItem(DID_YOU_KNOW_KEY, '1'); } catch { /* ignore */ }
-    setDidYouKnowVisible(false);
-  };
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -161,20 +148,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
           </p>
         </div>
 
-        {didYouKnowVisible && (
-          <div className="did-you-know-strip">
-            <span className="did-you-know-label">Did you know?</span>
-            <span className="did-you-know-text">{didYouKnowFact}</span>
-            <button
-              type="button"
-              className="did-you-know-dismiss"
-              onClick={dismissDidYouKnow}
-              aria-label="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        <div className="did-you-know-strip">
+          <span className="did-you-know-label">Did you know?</span>
+          <span className="did-you-know-text">{didYouKnowFact}</span>
+        </div>
       </header>
 
       <section aria-label="Smart suggestions">
@@ -218,6 +195,13 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
                 Try again
               </button>
             )}
+          </div>
+        ) : suggestions.length === 0 ? (
+          <div className="home-recs-empty" style={{ marginTop: '0.5rem' }}>
+            <p className="home-recs-empty-title">No suggestions for now</p>
+            <p className="home-recs-empty-body">
+              You're all caught up. Check back later for new pattern-aware ideas.
+            </p>
           </div>
         ) : (
           <div className="smart-recs-list" style={{ marginTop: '0.5rem' }}>
@@ -270,7 +254,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToBlocks }) => {
       </section>
 
       <section aria-label="Active session">
-        <SessionView />
+        <SessionView onNavigateToSettings={onNavigateToSettings} />
       </section>
 
       <section aria-label="This week" className="card">

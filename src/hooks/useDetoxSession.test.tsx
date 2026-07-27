@@ -9,11 +9,13 @@ let mockSettings: DetoxSettings = {
   cultureCode: 'pe_PE',
   languageCode: 'es-PE',
   mode: 'gentle',
+  voiceActorId: 'sofia',
   selectedMessageId: null,
   customMessages: [],
   userName: '',
   goals: [],
   preBlockReminderMinutes: 10,
+  blockExceptions: ['Phone', 'Messages'],
 };
 
 vi.mock('../state/settingsStore', () => ({
@@ -38,6 +40,8 @@ vi.mock('../plugins/AppBlocker', () => ({
   AppBlocker: {
     startBlocking: vi.fn().mockResolvedValue(undefined),
     stopBlocking: vi.fn().mockResolvedValue(undefined),
+    getInstalledApps: vi.fn().mockResolvedValue({ apps: [] }),
+    previewBlockedScreen: vi.fn().mockResolvedValue(undefined),
     addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
   },
 }));
@@ -64,11 +68,13 @@ describe('useDetoxSession', () => {
       cultureCode: 'pe_PE',
       languageCode: 'es-PE',
       mode: 'gentle',
+      voiceActorId: 'sofia',
       selectedMessageId: null,
       customMessages: [],
       userName: '',
       goals: [],
       preBlockReminderMinutes: 10,
+      blockExceptions: ['Phone', 'Messages'],
     };
   });
 

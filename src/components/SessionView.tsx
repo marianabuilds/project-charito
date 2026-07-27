@@ -3,12 +3,16 @@ import { useSession } from '../state/SessionContext';
 import { settingsStore } from '../state/settingsStore';
 import { culturalPresets } from '../data/culturalPresets';
 import { StrictOverlay } from './StrictOverlay';
+import { ActiveBlockOverlay, ActiveBlockBanner } from './ActiveBlockOverlay';
 import { journalStore } from '../state/journalStore';
 import { speak } from '../services/audioEngine';
 import { toastStore } from '../state/toastStore';
 import { rewardsStore } from '../state/rewardsStore';
 import { streakStore } from '../state/streakStore';
-import { useInstalledApps, FALLBACK_APP_CATEGORIES } from '../hooks/useInstalledApps';
+import { APP_PACKAGE_MAP, formatExceptionsSummary } from '../utils/appPackages';
+import { FloatingCta } from './FloatingCta';
+import { useInstalledApps } from '../hooks/useInstalledApps';
+
 const JOURNAL_TRIGGERS = ['Boredom', 'Stress', 'Habit', 'Notification'] as const;
 
 const AMBIENT_SOUNDS = [
@@ -18,23 +22,8 @@ const AMBIENT_SOUNDS = [
   { id: 'lofi', label: 'Lo-fi', url: 'https://cdn.pixabay.com/download/audio/2023/01/27/audio_8b378b3728.mp3' },
 ] as const;
 
-// ── App categories (web fallback) ───────────────────────────────────────────
-const APP_CATEGORIES = FALLBACK_APP_CATEGORIES;
-const COMMON_APPS = APP_CATEGORIES.flatMap((c) => [...c.apps]);
-const HIGH_USAGE_APPS = new Set(['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Facebook']);
-const TOP_HIGH_DATA = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X'];
-const POPULAR_PACKAGE_HINTS = [
-  'com.instagram.android',
-  'com.zhiliaoapp.musically',
-  'com.google.android.youtube',
-  'com.twitter.android',
-  'com.facebook.katana',
-];
-
-// Duration quick-pick pills
 const DURATION_PILLS = [15, 30, 45, 60, 90, 120] as const;
 
-// ── Quick block method types ─────────────────────────────────────────────────
 type QuickMethod = 'duration' | 'set-hours' | 'usage-limit' | 'launch-count' | null;
 
 const QUICK_METHODS: {
@@ -56,13 +45,11 @@ function formatDuration(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
+interface SessionViewProps {
+  onNavigateToSettings?: () => void;
 }
 
-export const SessionView: React.FC = () => {
+export const SessionView: React.FC<SessionViewProps> = ({ onNavigateToSettings }) => {
   const {
     status,
     elapsedSeconds,
@@ -79,8 +66,9 @@ export const SessionView: React.FC = () => {
   const [journalLogged, setJournalLogged] = React.useState(false);
   const [ambientSound, setAmbientSound] = React.useState<'off' | 'rain' | 'forest' | 'lofi'>('off');
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  /** When true, full-screen session UI is hidden so user can browse Home. Default true — never trap in Charito. */
+  const [activeUiDismissed, setActiveUiDismissed] = React.useState(true);
 
-  // ── Single-screen quick block state ─────────────────────────────────────
   const [quickMethod, setQuickMethod] = React.useState<QuickMethod>(null);
   const [quickDuration, setQuickDuration] = React.useState(30);
   const [quickFromTime, setQuickFromTime] = React.useState('09:00');
@@ -89,77 +77,50 @@ export const SessionView: React.FC = () => {
   const [quickLaunchCount, setQuickLaunchCount] = React.useState(10);
   const [quickMessageId, setQuickMessageId] = React.useState('');
   const [previewingId, setPreviewingId] = React.useState<string | null>(null);
-  const [quickSelectedApps, setQuickSelectedApps] = React.useState<string[]>([...COMMON_APPS]);
-  const [quickAppsExpanded, setQuickAppsExpanded] = React.useState(false);
+  const [appsExpanded, setAppsExpanded] = React.useState(false);
   const { apps: installedApps, isNativeList } = useInstalledApps();
-  const seededNativeRef = React.useRef(false);
 
+  const [blockExceptions, setBlockExceptions] = React.useState<string[]>(
+    () => settingsStore.get().blockExceptions ?? ['Phone', 'Messages'],
+  );
   React.useEffect(() => {
-    if (!isNativeList || installedApps.length === 0 || seededNativeRef.current) return;
-    seededNativeRef.current = true;
-    const popular = installedApps
-      .filter((a) => POPULAR_PACKAGE_HINTS.includes(a.packageName))
-      .map((a) => a.packageName);
-    setQuickSelectedApps(
-      popular.length > 0 ? popular : installedApps.slice(0, 8).map((a) => a.packageName),
-    );
-  }, [isNativeList, installedApps]);
-
-  const selectableIds = isNativeList
-    ? installedApps.map((a) => a.packageName)
-    : COMMON_APPS;
-
-  const labelForId = (id: string): string => {
-    if (isNativeList) {
-      return installedApps.find((a) => a.packageName === id)?.appName ?? id;
-    }
-    return id;
-  };
-
-  const toggleQuickApp = (app: string) => {
-    setQuickSelectedApps((prev) =>
-      prev.includes(app) ? prev.filter((a) => a !== app) : [...prev, app],
-    );
-  };
-
-  const selectCategoryApps = (apps: readonly string[]) => {
-    setQuickSelectedApps((prev) => {
-      const allSelected = apps.every((a) => prev.includes(a));
-      if (allSelected) return prev.filter((a) => !apps.includes(a));
-      return [...new Set([...prev, ...apps])];
+    return settingsStore.subscribe((s) => {
+      setBlockExceptions(s.blockExceptions ?? ['Phone', 'Messages']);
     });
-  };
+  }, []);
 
-  const quickAllAppsSelected =
-    selectableIds.length > 0 && selectableIds.every((id) => quickSelectedApps.includes(id));
-  const quickAppsBadge = quickAllAppsSelected
-    ? 'All apps'
-    : `${quickSelectedApps.length} app${quickSelectedApps.length === 1 ? '' : 's'}`;
-
-  const quickAppsPreviewText = React.useMemo(() => {
-    if (quickAllAppsSelected || quickSelectedApps.length === 0) return null;
-    const names = quickSelectedApps.map(labelForId);
-    const preview = names.slice(0, 3).join(', ');
-    const remainder = names.length - 3;
-    return remainder > 0 ? `${preview} +${remainder} more` : preview;
-  }, [quickSelectedApps, quickAllAppsSelected, isNativeList, installedApps]);
+  const exceptionNames = Array.from(new Set(['Phone', ...blockExceptions]));
+  const blockedPreviewNames = React.useMemo(() => {
+    if (isNativeList && installedApps.length > 0) {
+      return installedApps
+        .map((a) => a.appName)
+        .filter((name) => !exceptionNames.some(
+          (ex) => name.toLowerCase() === ex.toLowerCase(),
+        ));
+    }
+    return Object.keys(APP_PACKAGE_MAP).filter(
+      (name) => !exceptionNames.includes(name) && name !== 'Phone' && name !== 'Messages',
+    );
+  }, [isNativeList, installedApps, exceptionNames]);
 
   React.useEffect(() => {
     if (status === 'completed') {
-      // Award rewards points for completing a block
       rewardsStore.recordBlockCompleted();
       if (isStrict) setOverlayVisible(true);
     }
   }, [status, isStrict]);
 
-  // ── Celebration + streak affirmation on block completion ─────────────────
+  React.useEffect(() => {
+    // Reset when the session ends; never auto-open full-screen on start.
+    if (status === 'idle') setActiveUiDismissed(true);
+  }, [status]);
+
   const prevStatusRef = React.useRef<string>('idle');
   React.useEffect(() => {
     if (prevStatusRef.current !== 'completed' && status === 'completed') {
       const minutes = Math.max(1, Math.round(elapsedSeconds / 60));
       const minLabel = minutes === 1 ? 'minute' : 'minutes';
 
-      // Weekly reclaim total (journal entries this week + current block)
       const weekMinutes = journalStore.getThisWeek().reduce((sum, e) => sum + e.minutesReclaimed, 0) + minutes;
       const weekHours = (weekMinutes / 60).toFixed(1);
 
@@ -169,7 +130,6 @@ export const SessionView: React.FC = () => {
 
       toastStore.show(celebrationMsg);
 
-      // Streak affirmation — slight delay so toasts don't stack immediately
       const affirmation = streakStore.recordCompletion();
       if (affirmation) {
         window.setTimeout(() => toastStore.show(affirmation), 4200);
@@ -185,7 +145,6 @@ export const SessionView: React.FC = () => {
     }
   }, [status]);
 
-  // Manage ambient audio element
   React.useEffect(() => {
     const sound = AMBIENT_SOUNDS.find((s) => s.id === ambientSound);
     if (!sound || sound.url === '') {
@@ -216,28 +175,66 @@ export const SessionView: React.FC = () => {
   const handlePreviewMessage = (id: string, text: string) => {
     if (previewingId === id) { window.speechSynthesis.cancel(); setPreviewingId(null); return; }
     window.speechSynthesis.cancel();
-    const settings = settingsStore.get();
+    const s = settingsStore.get();
     setPreviewingId(id);
-    void speak(text, settings.languageCode).then(() => setPreviewingId(null));
+    void speak(text, s.languageCode).then(() => setPreviewingId(null));
   };
 
   const handleStartNow = () => {
     if (quickMethod === null) return;
     settingsStore.set({ durationMinutes: quickDuration });
     settingsStore.set({ selectedMessageId: quickMessageId || null });
-    // Pass selected apps (display names on web, package names on Android)
-    start(
-      quickSelectedApps.length > 0
-        ? quickSelectedApps
-        : selectableIds,
+    start([]);
+    toastStore.show(
+      `✓ Block started — ${formatExceptionsSummary(blockExceptions).toLowerCase()}.`,
     );
-    toastStore.show('✓ Offline block started. Charito will check in with you.');
   };
 
   const settings = settingsStore.get();
   const totalSeconds = settings.durationMinutes * 60;
-  const progress = totalSeconds > 0 ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100 : 0;
   const preset = culturalPresets.find((p) => p.cultureCode === settings.cultureCode);
+
+  // ── Active block: full-screen (or compact banner if dismissed) ──────────
+  if (status === 'running' || status === 'paused') {
+    if (!activeUiDismissed) {
+      return (
+        <ActiveBlockOverlay
+          remainingSeconds={remainingSeconds}
+          totalSeconds={totalSeconds}
+          message={currentMessageText}
+          isPaused={status === 'paused'}
+          onPause={pause}
+          onResume={resume}
+          onEndBlock={reset}
+          onBackToHome={() => setActiveUiDismissed(true)}
+        />
+      );
+    }
+
+    return (
+      <div className="session-active-compact">
+        <ActiveBlockBanner
+          remainingSeconds={remainingSeconds}
+          onOpen={() => setActiveUiDismissed(false)}
+          onEndBlock={reset}
+        />
+        {status === 'running' && (
+          <div className="ambient-sound-row">
+            <p className="ambient-sound-label">Ambient sound</p>
+            <div className="ambient-sound-pills">
+              {AMBIENT_SOUNDS.map((s) => (
+                <button key={s.id} type="button"
+                  className={`ambient-pill${ambientSound === s.id ? ' ambient-pill--active' : ''}`}
+                  onClick={() => setAmbientSound(s.id as typeof ambientSound)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── Idle state: single-screen block builder ─────────────────────────────
   if (status === 'idle') {
@@ -282,122 +279,60 @@ export const SessionView: React.FC = () => {
         <div className="quick-apps-row quick-apps-row--inline">
           <div className="apps-section-header">
             <span className="block-form-label" style={{ fontSize: '0.8125rem' }}>Apps</span>
-            <span className={`apps-badge${quickAllAppsSelected ? ' apps-badge--all' : ' apps-badge--custom'}`}>
-              {quickAppsBadge}
-            </span>
+            <span className="apps-badge apps-badge--all">All apps</span>
           </div>
+          <p className="quick-reminder-helper" style={{ marginTop: '0.35rem' }}>
+            Blocks all apps. Exceptions from Settings stay available.
+          </p>
           <button
             type="button"
             className="apps-expand-btn"
-            onClick={() => setQuickAppsExpanded((v) => !v)}
-            aria-expanded={quickAppsExpanded}
+            onClick={() => setAppsExpanded((v) => !v)}
+            aria-expanded={appsExpanded}
           >
-            {quickAppsExpanded ? '▲ Collapse' : '＋ Choose apps'}
+            {appsExpanded ? '▲ Collapse' : '＋ All apps'}
           </button>
-          {!quickAppsExpanded && quickAppsPreviewText && (
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0.15rem 0 0' }}>
-              {quickAppsPreviewText}
-            </p>
-          )}
-          {quickAppsExpanded && (
-            <div className="apps-list" style={{ marginTop: '0.375rem' }}>
-              {isNativeList ? (
-                <>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-m)', margin: '0 0 0.5rem' }}>
-                    Apps installed on this phone. Phone/Dialer is never blocked.
-                  </p>
-                  <div className="apps-recommended-row">
-                    <button
-                      type="button"
-                      className="apps-recommended-btn"
-                      onClick={() =>
-                        setQuickSelectedApps(
-                          installedApps
-                            .filter((a) => POPULAR_PACKAGE_HINTS.includes(a.packageName))
-                            .map((a) => a.packageName),
-                        )
-                      }
-                    >
-                      ＋ Popular apps
-                    </button>
-                    {!quickAllAppsSelected && (
-                      <button
-                        type="button"
-                        className="apps-select-all-btn"
-                        onClick={() => setQuickSelectedApps([...selectableIds])}
-                      >
-                        Select all
-                      </button>
-                    )}
-                  </div>
-                  <div className="apps-category-group">
-                    {installedApps.map((app) => (
-                      <label key={app.packageName} className="apps-list-row">
-                        <input
-                          type="checkbox"
-                          checked={quickSelectedApps.includes(app.packageName)}
-                          onChange={() => toggleQuickApp(app.packageName)}
-                          className="apps-checkbox"
-                        />
-                        <span className="apps-list-name">{app.appName}</span>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="apps-recommended-row">
-                    <button type="button" className="apps-recommended-btn"
-                      onClick={() => setQuickSelectedApps([...APP_CATEGORIES[0].apps])}>
-                      ＋ Social media block
-                    </button>
-                    <button type="button" className="apps-recommended-btn"
-                      onClick={() => setQuickSelectedApps([...TOP_HIGH_DATA])}>
-                      ＋ High-usage block
-                    </button>
-                  </div>
-                  {!quickAllAppsSelected && (
-                    <button type="button" className="apps-select-all-btn"
-                      onClick={() => setQuickSelectedApps([...COMMON_APPS])}>
-                      Select all
-                    </button>
-                  )}
-                  {APP_CATEGORIES.map((cat) => (
-                    <div key={cat.label} className="apps-category-group">
-                      <div className="apps-category-header">
-                        <span className="apps-category-label">{cat.label.toUpperCase()}</span>
-                        <button type="button" className="apps-category-all-btn"
-                          onClick={() => selectCategoryApps(cat.apps)}>
-                          All
-                        </button>
-                      </div>
-                      {cat.apps.map((app) => (
-                        <label key={app} className="apps-list-row">
-                          <input type="checkbox" checked={quickSelectedApps.includes(app)}
-                            onChange={() => toggleQuickApp(app)} className="apps-checkbox" />
-                          <span className="apps-list-name">{app}</span>
-                          {HIGH_USAGE_APPS.has(app) && (
-                            <span className="apps-high-usage-tag">📱 High usage</span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
-                  ))}
-                </>
+          {appsExpanded && (
+            <div className="apps-list" style={{ marginTop: '0.5rem' }}>
+              <p className="apps-category-label" style={{ marginBottom: '0.35rem' }}>
+                Exceptions (stay on)
+              </p>
+              <ul className="quick-exceptions-list">
+                {exceptionNames.map((name) => (
+                  <li key={name} className="quick-exception-chip">
+                    {name}
+                    <span className="quick-exception-stay">stays on</span>
+                  </li>
+                ))}
+              </ul>
+              {onNavigateToSettings && (
+                <button
+                  type="button"
+                  className="apps-select-all-btn"
+                  style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}
+                  onClick={onNavigateToSettings}
+                >
+                  Change exceptions in Settings →
+                </button>
+              )}
+              <p className="apps-category-label" style={{ margin: '0.5rem 0 0.35rem' }}>
+                Blocked
+              </p>
+              <ul className="quick-exceptions-list">
+                {blockedPreviewNames.slice(0, 24).map((name) => (
+                  <li key={name} className="quick-exception-chip quick-exception-chip--blocked">
+                    {name}
+                    <span className="quick-exception-blocked">blocked</span>
+                  </li>
+                ))}
+              </ul>
+              {blockedPreviewNames.length > 24 && (
+                <p className="quick-reminder-helper" style={{ marginTop: '0.35rem' }}>
+                  +{blockedPreviewNames.length - 24} more
+                </p>
               )}
             </div>
           )}
-        </div>
-
-        <div className="quick-start-wrap">
-          <button
-            type="button"
-            className="button button-primary quick-start-btn"
-            onClick={handleStartNow}
-            style={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700 }}
-          >
-            Start offline block
-          </button>
         </div>
       </>
     );
@@ -406,10 +341,10 @@ export const SessionView: React.FC = () => {
       <div className="quick-session-card">
         <p className="quick-section-label">Quick detox</p>
 
-        {/* Vertically stacked methods — Reminder + Apps expand under the active one */}
         <div className="quick-method-grid">
           {QUICK_METHODS.map((m) => {
             const isActive = quickMethod === m.id;
+            if (quickMethod !== null && !isActive) return null;
             return (
               <div key={m.id} className={`quick-method-block${isActive ? ' quick-method-block--active' : ''}`}>
                 <button
@@ -520,6 +455,13 @@ export const SessionView: React.FC = () => {
             );
           })}
         </div>
+        {quickMethod !== null && (
+          <FloatingCta
+            label="Start offline block"
+            onClick={handleStartNow}
+            ariaLabel="Start offline block"
+          />
+        )}
       </div>
     );
   }
@@ -547,7 +489,7 @@ export const SessionView: React.FC = () => {
           )}
         </p>
         {currentMessageText && (
-          <p className="session-complete-quote"><em>"{currentMessageText}"</em></p>
+          <p className="session-complete-quote"><em>&ldquo;{currentMessageText}&rdquo;</em></p>
         )}
 
         {!journalLogged && (
@@ -565,58 +507,16 @@ export const SessionView: React.FC = () => {
           </div>
         )}
         {journalLogged && (
-          <button type="button" className="button button-primary" onClick={reset}>Start another</button>
+          <>
+            <div className="floating-cta-spacer" aria-hidden="true" />
+            <FloatingCta label="Start another" onClick={reset} ariaLabel="Start another block" />
+          </>
         )}
       </div>
     );
   }
 
-  // ── Running / paused state ──────────────────────────────────────────────
-  const modeLabel = isStrict ? 'Focused block' : 'Soft reminders';
-
   return (
-    <div className="session-view card">
-      <div className="session-view-top">
-        <p className="session-mode">{modeLabel}</p>
-        <p className="session-timer" aria-live="polite" aria-label="Time remaining">
-          {formatTime(remainingSeconds)}
-        </p>
-        <div className="session-progress" role="progressbar"
-          aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
-          <div className="session-progress-bar" style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-
-      <div className="session-controls">
-        {status === 'running' && (
-          <button type="button" className="button button-secondary" onClick={pause}>Pause</button>
-        )}
-        {status === 'paused' && (
-          <button type="button" className="button button-primary" onClick={resume}>Resume</button>
-        )}
-        <button type="button" className="button button-ghost" onClick={reset}>Reset</button>
-      </div>
-
-      {status === 'running' && (
-        <div className="ambient-sound-row">
-          <p className="ambient-sound-label">Ambient sound</p>
-          <div className="ambient-sound-pills">
-            {AMBIENT_SOUNDS.map((s) => (
-              <button key={s.id} type="button"
-                className={`ambient-pill${ambientSound === s.id ? ' ambient-pill--active' : ''}`}
-                onClick={() => setAmbientSound(s.id as typeof ambientSound)}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {currentMessageText && (
-        <p className="session-last-reminder" aria-live="polite"><em>{currentMessageText}</em></p>
-      )}
-
-      <StrictOverlay visible={overlayVisible} message={currentMessageText} onDismiss={handleDismissOverlay} />
-    </div>
+    <StrictOverlay visible={overlayVisible} message={currentMessageText} onDismiss={handleDismissOverlay} />
   );
 };

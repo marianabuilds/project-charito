@@ -65,8 +65,10 @@ public class AppBlockerService extends AccessibilityService {
             return;
         }
 
-        // Ignore our own app and system UI
-        if (pkg.equals(getPackageName())) {
+        // Never treat Charito (MainActivity or BlockedOverlayActivity) as a blocked app —
+        // users must keep Home usable to schedule/manage blocks during a detox.
+        String selfPkg = getPackageName();
+        if (pkg.equals(selfPkg)) {
             lastBlockedPackage = null;
             return;
         }
@@ -83,7 +85,7 @@ public class AppBlockerService extends AccessibilityService {
         }
 
         Set<String> blocked = prefs.getStringSet(KEY_BLOCKED, new HashSet<>());
-        if (blocked == null || !blocked.contains(pkg)) {
+        if (blocked == null || !blocked.contains(pkg) || pkg.equals(selfPkg)) {
             // Not a blocked app — reset tracking
             if (!pkg.equals(lastBlockedPackage)) lastBlockedPackage = null;
             return;

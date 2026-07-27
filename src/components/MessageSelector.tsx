@@ -88,33 +88,16 @@ export const MessageSelector: React.FC = () => {
           </span>
         </label>
 
-        {/* Cultural preset messages */}
+        {/* Cultural preset messages — play lives inside AudioMessageRow */}
         {preset.messages.map((message) => (
-          <div key={message.id} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-            <AudioMessageRow
-              text={message.text}
-              name="selected-message"
-              value={message.id}
-              checked={state.selectedMessageId === message.id}
-              onChange={() => handleSelect(message.id)}
-            />
-            <button
-              type="button"
-              onClick={() => handlePreview(message.id, message.text)}
-              aria-label={previewingId === message.id ? 'Stop preview' : 'Preview message'}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                color: 'var(--text-m)',
-                flexShrink: 0,
-                padding: '0 0.25rem',
-              }}
-            >
-              {previewingId === message.id ? '■' : '▶'}
-            </button>
-          </div>
+          <AudioMessageRow
+            key={message.id}
+            text={message.text}
+            name="selected-message"
+            value={message.id}
+            checked={state.selectedMessageId === message.id}
+            onChange={() => handleSelect(message.id)}
+          />
         ))}
 
         {/* Custom messages — list */}

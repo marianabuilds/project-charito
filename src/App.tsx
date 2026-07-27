@@ -38,7 +38,12 @@ export const App: React.FC = () => {
       <div className="app-root">
         <main className="app-main">
           <React.Suspense fallback={<div className="view" />}>
-            {view === 'home' && <HomeView onNavigateToBlocks={navigateToBlocks} />}
+            {view === 'home' && (
+              <HomeView
+                onNavigateToBlocks={navigateToBlocks}
+                onNavigateToSettings={() => setView('settings')}
+              />
+            )}
             {view === 'blocks' && (
               <BlocksView
                 prefill={blockPrefill}

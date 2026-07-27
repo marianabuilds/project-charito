@@ -8,7 +8,7 @@ import { speak } from '../services/audioEngine';
 import { AppBlocker } from '../plugins/AppBlocker';
 import { BlockScheduler } from '../plugins/BlockScheduler';
 import type { ScheduledBlockNative } from '../plugins/BlockScheduler';
-import { APP_PACKAGE_MAP, resolvePackages } from '../utils/appPackages';
+import { APP_PACKAGE_MAP, filterBlockedPackages, resolvePackages } from '../utils/appPackages';
 import {
   isWithinSetHoursWindow,
   showLocalNotification,
@@ -78,9 +78,18 @@ function blockEndEpochMs(block: DetoxBlock): number {
 
 async function startBlockAppBlocking(block: DetoxBlock, reminderText: string | null): Promise<void> {
   if (!isAndroid) return;
-  const pkgs = resolvePackages(
-    block.selectedApps.length > 0 ? block.selectedApps : Object.keys(APP_PACKAGE_MAP),
-  );
+  const exceptions = settingsStore.get().blockExceptions ?? ['Phone', 'Messages'];
+  let pkgs: string[];
+  if (block.selectedApps.length > 0) {
+    pkgs = resolvePackages(block.selectedApps, exceptions);
+  } else {
+    try {
+      const { apps } = await AppBlocker.getInstalledApps();
+      pkgs = filterBlockedPackages(apps.map((a) => a.packageName), exceptions);
+    } catch {
+      pkgs = resolvePackages(Object.keys(APP_PACKAGE_MAP), exceptions);
+    }
+  }
   if (pkgs.length === 0) return;
   await AppBlocker.startBlocking({
     packages: pkgs,
@@ -117,27 +126,45 @@ export function useDetoxBlocks(onTrigger: (block: DetoxBlock) => void): UseDetox
   // Sync set-hours blocks to native AlarmManager so they fire when the app is closed / after reboot
   useEffect(() => {
     if (!isAndroid) return;
-    const preMins = settingsStore.get().preBlockReminderMinutes ?? 10;
-    const schedules: ScheduledBlockNative[] = blockState.blocks
-      .filter((b) => b.active && b.blockingMethod === 'set-hours' && b.setHoursStart && b.setHoursEnd)
-      .map((b) => {
-        const pkgs = resolvePackages(
-          b.selectedApps.length > 0 ? b.selectedApps : Object.keys(APP_PACKAGE_MAP),
-        );
-        return {
-          id: b.id,
-          label: b.label || 'Detox block',
-          startHHMM: b.setHoursStart,
-          endHHMM: b.setHoursEnd,
-          days: [...b.days],
-          packages: pkgs,
-          preMins,
-          reminderText: resolveBlockMessage(b) ?? undefined,
-        };
-      })
-      .filter((s) => s.packages.length > 0);
+    let cancelled = false;
+    void (async () => {
+      const preMins = settingsStore.get().preBlockReminderMinutes ?? 10;
+      const exceptions = settingsStore.get().blockExceptions ?? ['Phone', 'Messages'];
+      let installedPkgs: string[] | null = null;
+      try {
+        const { apps } = await AppBlocker.getInstalledApps();
+        installedPkgs = apps.map((a) => a.packageName);
+      } catch { /* fall back to map */ }
 
-    void BlockScheduler.syncSchedules({ schedules }).catch(() => { /* ignore on web/plugin miss */ });
+      if (cancelled) return;
+
+      const schedules: ScheduledBlockNative[] = blockState.blocks
+        .filter((b) => b.active && b.blockingMethod === 'set-hours' && b.setHoursStart && b.setHoursEnd)
+        .map((b) => {
+          let pkgs: string[];
+          if (b.selectedApps.length > 0) {
+            pkgs = resolvePackages(b.selectedApps, exceptions);
+          } else if (installedPkgs) {
+            pkgs = filterBlockedPackages(installedPkgs, exceptions);
+          } else {
+            pkgs = resolvePackages(Object.keys(APP_PACKAGE_MAP), exceptions);
+          }
+          return {
+            id: b.id,
+            label: b.label || 'Detox block',
+            startHHMM: b.setHoursStart,
+            endHHMM: b.setHoursEnd,
+            days: [...b.days],
+            packages: pkgs,
+            preMins,
+            reminderText: resolveBlockMessage(b) ?? undefined,
+          };
+        })
+        .filter((s) => s.packages.length > 0);
+
+      void BlockScheduler.syncSchedules({ schedules }).catch(() => { /* ignore on web/plugin miss */ });
+    })();
+    return () => { cancelled = true; };
   }, [blockState.blocks]);
 
   useEffect(() => {

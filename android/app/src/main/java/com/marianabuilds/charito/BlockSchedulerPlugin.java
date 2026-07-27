@@ -108,6 +108,29 @@ public class BlockSchedulerPlugin extends Plugin {
         call.resolve(result);
     }
 
+    /**
+     * Opens the system notification settings screen for Charito so the user
+     * can grant POST_NOTIFICATIONS after a deny (or toggle channels).
+     */
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        try {
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+            } else {
+                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void hasExactAlarmPermission(PluginCall call) {
         boolean granted = true;
